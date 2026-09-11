@@ -2,16 +2,19 @@
 """
 Terminal Typing Game (ttyping)
 Features:
-- Character-by-character precision: Space is treated just like any other key (never skips words).
-- Live color coding: Correct letters are GREEN, mistyped letters are RED, upcoming text is FADED.
+- Big Font Mode: Giant 3-row block letters for maximum visibility and readability!
+- Spacious Centered Layout: Double line spacing, high-contrast colors, and generous margins.
+- High-Contrast Palette: Crisp light gray for upcoming text (no muddy/invisible dim text),
+  vibrant neon green for correct characters, and vivid bold red for errors.
+- Character Precision: Space is treated just like any other key (never skips words).
 - Mode 1 (Sprint): Simple sentences to test your WPM in 1-2 minutes.
-- Mode 2 (Endless): Continuous practice with controlled difficulty:
+- Mode 2 (Endless): Continuous practice with controlled difficulty pacing:
     * Comma / Full stop: once every ~35 words (<= 50 words)
     * Numbers: once every 100 words
     * Special characters / symbols: once every 200 words
     * All other words: arbitrary clean vocabulary
-- Interactive Top Bar: Clickable via mouse and selectable with keys [1], [2], or [TAB].
-- CLI Flags: --sprint (-1), --endless (-2), or custom practice text.
+- Interactive Top Bar: Clickable via mouse and selectable with keys [1], [2], [B], or [TAB].
+- CLI Flags: --sprint (-1), --endless (-2), --big (-b), or custom practice text.
 """
 
 import sys
@@ -75,6 +78,68 @@ SYMBOL_WORDS = [
     "is_valid_token?", "get_connection()", "print(\"hello\")", "result!=None"
 ]
 
+# 3-row large ASCII font dictionary
+FONT_3X3 = {
+    'a': [' ▄ ', '█▄█', '█ █'],
+    'b': ['█▀▄', '█▀▄', '▀▀ '],
+    'c': [' ▄▀', '█  ', ' ▀▄'],
+    'd': ['█▀▄', '█ █', '▀▀ '],
+    'e': ['█▀▀', '█▀▀', '▀▀▀'],
+    'f': ['█▀▀', '█▀ ', '▀  '],
+    'g': [' ▄▀', '█ ▀', ' ▀▄'],
+    'h': ['█ █', '█▀█', '█ █'],
+    'i': [' █ ', ' █ ', ' ▀ '],
+    'j': ['  █', '  █', '▀▀ '],
+    'k': ['█ ▄', '█▀ ', '█ ▀'],
+    'l': ['█  ', '█  ', '▀▀▀'],
+    'm': ['█▄█', '█ █', '█ █'],
+    'n': ['█▀▄', '█ █', '▀ ▀'],
+    'o': [' ▄ ', '█ █', ' ▀ '],
+    'p': ['█▀▄', '█▀▀', '▀  '],
+    'q': [' ▄ ', '█ █', ' ▀▄'],
+    'r': ['█▀▄', '█▀ ', '▀  '],
+    's': [' ▄▀', ' ▀▄', '▀▀ '],
+    't': ['▀█▀', ' █ ', ' ▀ '],
+    'u': ['█ █', '█ █', ' ▀ '],
+    'v': ['█ █', '█ █', ' ▀ '],
+    'w': ['█ █', '█ █', '▀▄▀'],
+    'x': ['▀▄▀', ' █ ', '▀▄▀'],
+    'y': ['█ █', ' ▀█', '▀▀ '],
+    'z': ['▀▀█', ' █ ', '█▀▀'],
+    '0': ['█▀█', '█ █', '▀▀▀'],
+    '1': [' ▄█', '  █', '  ▀'],
+    '2': ['▀▀█', ' ▄▀', '▀▀▀'],
+    '3': ['▀▀█', ' ▀▄', '▀▀▀'],
+    '4': ['█ █', '▀▀█', '  ▀'],
+    '5': ['█▀▀', '▀▀▄', '▀▀▀'],
+    '6': ['█▀▀', '█▀▄', '▀▀▀'],
+    '7': ['▀▀█', '  █', '  ▀'],
+    '8': ['█▀█', '█▀▄', '▀▀▀'],
+    '9': ['█▀█', '▀▀█', '  ▀'],
+    ' ': ['   ', '   ', '   '],
+    '.': ['   ', '   ', ' ▄ '],
+    ',': ['   ', ' ▄ ', '▀  '],
+    '(': [' ▄▀', ' █ ', ' ▀▄'],
+    ')': ['▀▄ ', ' █ ', '▄▀ '],
+    '[': ['▀▀ ', '█  ', '▀▀ '],
+    ']': [' ▀▀', '  █', ' ▀▀'],
+    ':': [' ▄ ', '   ', ' ▄ '],
+    ';': [' ▄ ', '   ', '▀  '],
+    '-': ['   ', '▀▀▀', '   '],
+    '_': ['   ', '   ', '▀▀▀'],
+    '+': [' ▄ ', '▀█▀', ' ▀ '],
+    '=': ['▀▀▀', '   ', '▀▀▀'],
+    '!': [' █ ', ' █ ', ' ▄ '],
+    '?': ['▀▀█', ' ▄▀', ' ▄ '],
+    '/': ['  ▄', ' ▄▀', '▄  '],
+    '"': ['█ █', '   ', '   '],
+    "'": [' █ ', '   ', '   '],
+    '#': ['█▀█', '▀█▀', '█ █'],
+}
+
+def get_glyph(char):
+    return FONT_3X3.get(char.lower(), [' █ ', ' █ ', ' █ '])
+
 def format_time(seconds):
     mins = int(seconds) // 60
     secs = int(seconds) % 60
@@ -88,13 +153,6 @@ class TypingEngine:
         self.reset()
 
     def _generate_endless_word(self, index):
-        """
-        Difficulty pacing for Endless Mode:
-        - Special characters / symbols: once every 200 words
-        - Numbers: once every 100 words
-        - Full stop or comma: once every 35 words (<= 50 words)
-        - Others: arbitrary clean English words
-        """
         word_num = index + 1
         if word_num % 200 == 0:
             return random.choice(SYMBOL_WORDS)
@@ -150,13 +208,11 @@ class TypingEngine:
         self.total_keystrokes += 1
         self.typed_chars.append(char)
 
-        # In Endless Mode, stream more words dynamically as the player nears the end
         if self.mode == "ENDLESS":
             if len(self.typed_chars) > len(self.target_text) - 120:
                 more_words = " " + self.generate_endless_batch(25)
                 self.target_text += more_words
 
-        # In Sprint Mode, finish when all characters in the sentence are typed
         elif self.mode == "SPRINT":
             if len(self.typed_chars) >= len(self.target_text):
                 self.completed = True
@@ -201,7 +257,6 @@ class TypingEngine:
         typed_len = len(self.typed_chars)
         accuracy = (correct_count / typed_len * 100.0) if typed_len > 0 else 100.0
 
-        # Calculate completed words
         completed_words = 0
         current_text_typed = self.target_text[:typed_len]
         words_in_typed_part = current_text_typed.split(' ')
@@ -238,9 +293,6 @@ def safe_addstr(stdscr, y, x, text, attr=0):
         pass
 
 def build_char_positions(text, wrap_width):
-    """
-    Wraps text by words and maps each character index to (row, col) coordinates.
-    """
     char_positions = {}
     words = text.split(' ')
     cur_row = 0
@@ -248,7 +300,6 @@ def build_char_positions(text, wrap_width):
     global_idx = 0
 
     for w_idx, word in enumerate(words):
-        # Wrap to next line if word does not fit on current line
         if cur_col + len(word) > wrap_width and cur_col > 0:
             cur_row += 1
             cur_col = 0
@@ -261,7 +312,6 @@ def build_char_positions(text, wrap_width):
             cur_col += 1
             global_idx += 1
 
-        # Space character between words
         if w_idx < len(words) - 1:
             if cur_col >= wrap_width:
                 cur_row += 1
@@ -272,7 +322,7 @@ def build_char_positions(text, wrap_width):
 
     return char_positions, cur_row + 1
 
-def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
+def run_game(stdscr, initial_mode="SPRINT", custom_text=None, start_big_font=False):
     try:
         curses.curs_set(1)
     except curses.error:
@@ -281,51 +331,60 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
     stdscr.nodelay(True)
     stdscr.keypad(True)
 
-    # Enable mouse tracking for interactive top-bar clicks
     try:
         curses.mousemask(curses.ALL_MOUSE_EVENTS | curses.REPORT_MOUSE_POSITION)
     except curses.error:
         pass
 
-    # Colors
-    c_cyan = c_green = c_red = c_yellow = c_faded = c_white = 0
+    # High-contrast, easy-to-see color palette
+    c_cyan = c_green = c_red = c_yellow = c_faded = c_white = c_highlight = 0
     if curses.has_colors():
         curses.start_color()
         try:
             curses.use_default_colors()
             curses.init_pair(1, curses.COLOR_CYAN, -1)
-            curses.init_pair(2, curses.COLOR_GREEN, -1)
-            curses.init_pair(3, curses.COLOR_RED, -1)
             curses.init_pair(5, curses.COLOR_YELLOW, -1)
             curses.init_pair(6, curses.COLOR_WHITE, -1)
 
             if curses.COLORS >= 256:
-                curses.init_pair(4, 244, -1)
-                c_faded = curses.color_pair(4)
+                # Vibrant 256 colors:
+                # Color 46: Neon bright green
+                # Color 196: Vivid red
+                # Color 250: Crisp light slate gray (high contrast, clearly visible)
+                # Color 226: Bright gold
+                curses.init_pair(2, 46, -1)
+                curses.init_pair(3, 196, -1)
+                curses.init_pair(4, 250, -1)
+                curses.init_pair(7, 226, -1)
             else:
-                curses.init_pair(4, curses.COLOR_BLACK, -1)
-                c_faded = curses.color_pair(4) | curses.A_BOLD | curses.A_DIM
+                curses.init_pair(2, curses.COLOR_GREEN, -1)
+                curses.init_pair(3, curses.COLOR_RED, -1)
+                curses.init_pair(4, curses.COLOR_WHITE, -1)
+                curses.init_pair(7, curses.COLOR_YELLOW, -1)
 
             c_cyan = curses.color_pair(1)
-            c_green = curses.color_pair(2)
-            c_red = curses.color_pair(3)
-            c_yellow = curses.color_pair(5)
-            c_white = curses.color_pair(6)
+            c_green = curses.color_pair(2) | curses.A_BOLD
+            c_red = curses.color_pair(3) | curses.A_BOLD
+            c_faded = curses.color_pair(4)  # Clear, readable light gray
+            c_yellow = curses.color_pair(5) | curses.A_BOLD
+            c_white = curses.color_pair(6) | curses.A_BOLD
+            c_highlight = curses.color_pair(7) | curses.A_BOLD
         except curses.error:
             pass
 
     if not c_faded:
-        c_faded = curses.A_DIM
+        c_faded = curses.A_BOLD
 
     engine = TypingEngine(mode=initial_mode, custom_text=custom_text)
+    big_font = start_big_font
     last_stats = None
 
     while True:
         stdscr.erase()
         max_y, max_x = stdscr.getmaxyx()
 
-        if max_y < 13 or max_x < 55:
-            safe_addstr(stdscr, 1, 2, "Please expand terminal window to play...", curses.A_BOLD)
+        if max_y < 14 or max_x < 55:
+            safe_addstr(stdscr, 1, 2, "Please enlarge terminal window to play...", curses.A_BOLD)
             stdscr.refresh()
             time.sleep(0.1)
             try:
@@ -340,28 +399,35 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
         last_stats = stats
 
         # ==========================================
-        # 1. TOP BAR (Clickable with mouse or 1/2)
+        # 1. TOP BAR (Clickable with mouse, 1, 2, B)
         # ==========================================
-        btn_sprint = "[ 1: ⚡ Sprint (WPM Test) ]"
-        btn_endless = "[ 2: ♾️ Endless (Mastery) ]"
+        btn_sprint = "[ 1: ⚡ Sprint ]"
+        btn_endless = "[ 2: ♾️ Endless ]"
+        btn_big = f"[ B: 🔍 Big Font: {'ON ' if big_font else 'OFF'} ]"
 
         top_buttons = []
         cur_btn_x = 2
 
         # Button 1: Sprint
         is_sprint = (engine.mode == "SPRINT")
-        sprint_attr = (curses.A_REVERSE | curses.A_BOLD | c_green) if is_sprint else (curses.A_BOLD | c_white)
+        sprint_attr = (curses.A_REVERSE | c_green) if is_sprint else c_white
         safe_addstr(stdscr, 0, cur_btn_x, btn_sprint, sprint_attr)
         top_buttons.append((cur_btn_x, cur_btn_x + len(btn_sprint), "SPRINT"))
         cur_btn_x += len(btn_sprint) + 2
 
         # Button 2: Endless
         is_endless = (engine.mode == "ENDLESS")
-        endless_attr = (curses.A_REVERSE | curses.A_BOLD | c_yellow) if is_endless else (curses.A_BOLD | c_white)
+        endless_attr = (curses.A_REVERSE | c_yellow) if is_endless else c_white
         safe_addstr(stdscr, 0, cur_btn_x, btn_endless, endless_attr)
         top_buttons.append((cur_btn_x, cur_btn_x + len(btn_endless), "ENDLESS"))
+        cur_btn_x += len(btn_endless) + 2
 
-        # Right-aligned exit hint
+        # Button 3: Big Font Toggle
+        big_attr = (curses.A_REVERSE | c_cyan) if big_font else c_white
+        safe_addstr(stdscr, 0, cur_btn_x, btn_big, big_attr)
+        top_buttons.append((cur_btn_x, cur_btn_x + len(btn_big), "TOGGLE_BIG"))
+
+        # Right-aligned exit button
         exit_label = "[ESC: Exit]"
         safe_addstr(stdscr, 0, max_x - len(exit_label) - 2, exit_label, c_cyan)
 
@@ -369,98 +435,185 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
         safe_addstr(stdscr, 1, 2, "═" * (max_x - 4), c_cyan)
 
         # ==========================================
-        # 2. STATS BAR
+        # 2. PROMINENT STATS DASHBOARD
         # ==========================================
-        time_str = f"⏱ Time: {format_time(stats['elapsed'])}"
-        wpm_str = f"⚡ WPM: {stats['wpm']}"
+        time_str = f"⏱  {format_time(stats['elapsed'])}"
+        wpm_str = f"⚡ {stats['wpm']} WPM"
         cpm_str = f"CPM: {stats['cpm']}"
-        acc_str = f"Acc: {stats['accuracy']}%"
-        err_str = f"Errors: {stats['mistakes']}"
-        prog_str = f"Words: {stats['words_completed']}/{stats['total_words']}"
+        acc_str = f"🎯 {stats['accuracy']}%"
+        err_str = f"❌ {stats['mistakes']} err"
+        prog_str = f"📝 {stats['words_completed']}/{stats['total_words']} words"
 
-        stat_bar = f"{time_str}   {wpm_str}   {cpm_str}   {acc_str}   {err_str}   {prog_str}"
-        safe_addstr(stdscr, 2, 4, stat_bar, curses.A_BOLD)
+        stat_bar = f"{time_str}     {wpm_str}     {cpm_str}     {acc_str}     {err_str}     {prog_str}"
+        stat_x = max(2, (max_x - len(stat_bar)) // 2)
+        safe_addstr(stdscr, 2, stat_x, stat_bar, curses.A_BOLD | c_highlight)
         safe_addstr(stdscr, 3, 2, "─" * (max_x - 4), c_faded)
 
         # ==========================================
-        # 3. TEXT RENDERING (GREEN = Correct, RED = Error, FADED = Upcoming)
+        # 3. TYPING CANVAS (BIG FONT or SPACIOUS MODE)
         # ==========================================
-        start_row = 5
-        wrap_width = max(30, max_x - 8)
-        padding_left = 4
-
-        char_positions, total_rows = build_char_positions(engine.target_text, wrap_width)
-
-        # Determine cursor coordinates
         curr_idx = len(engine.typed_chars)
-        if curr_idx in char_positions:
-            active_row, active_col = char_positions[curr_idx]
-        elif curr_idx > 0 and (curr_idx - 1) in char_positions:
-            prev_row, prev_col = char_positions[curr_idx - 1]
-            active_row, active_col = prev_row, prev_col + 1
-        else:
-            active_row, active_col = (0, 0)
 
-        # Smooth vertical scroll to keep current typing line centered
-        scroll_offset = max(0, active_row - 1)
-        visible_lines = min(max_y - 9, total_rows - scroll_offset)
+        if big_font:
+            # ==========================================
+            # BIG FONT MODE: Giant 3-row block letters!
+            # ==========================================
+            # Locate active word boundaries
+            target = engine.target_text
+            # Find word start and end for current cursor
+            word_start = target.rfind(' ', 0, curr_idx) + 1 if curr_idx > 0 else 0
+            word_end = target.find(' ', curr_idx)
+            if word_end == -1:
+                word_end = len(target)
 
-        # Draw each character of the target text
-        screen_y = start_row
-        screen_x = padding_left
-        for i, target_ch in enumerate(engine.target_text):
-            if i not in char_positions:
-                continue
+            active_word = target[word_start:word_end]
+            # Next word
+            next_start = word_end + 1 if word_end < len(target) else len(target)
+            next_end = target.find(' ', next_start)
+            if next_end == -1:
+                next_end = len(target)
+            next_word = target[next_start:next_end]
 
-            r, c = char_positions[i]
-            screen_y = start_row + (r - scroll_offset)
+            # Header inside canvas
+            safe_addstr(stdscr, 4, 4, "CURRENT WORD (GIANT LETTERS):", curses.A_BOLD | c_cyan)
 
-            # Skip lines outside visible screen area
-            if screen_y < start_row or screen_y >= start_row + visible_lines:
-                continue
+            # Render 3-row letters for the active word
+            start_y = 6
+            start_x = 4
 
-            screen_x = padding_left + c
+            letter_offset_in_word = curr_idx - word_start
+            draw_x = start_x
 
-            if i < curr_idx:
-                typed_ch = engine.typed_chars[i]
-                if typed_ch == target_ch:
-                    # Correct letter -> GREEN
-                    safe_addstr(stdscr, screen_y, screen_x, target_ch, c_green | curses.A_BOLD)
-                else:
-                    # Error letter -> RED
-                    if typed_ch == ' ':
-                        safe_addstr(stdscr, screen_y, screen_x, "_", c_red | curses.A_BOLD | curses.A_UNDERLINE)
+            cursor_screen_y = start_y + 1
+            cursor_screen_x = start_x
+
+            for char_pos, ch in enumerate(active_word):
+                glyph = get_glyph(ch)
+
+                # Determine color of this character in the giant word
+                if char_pos < letter_offset_in_word:
+                    typed_ch = engine.typed_chars[word_start + char_pos]
+                    if typed_ch == ch:
+                        color = c_green
                     else:
-                        safe_addstr(stdscr, screen_y, screen_x, typed_ch, c_red | curses.A_BOLD | curses.A_UNDERLINE)
+                        color = c_red
+                else:
+                    color = c_faded
+
+                # Draw 3 rows for this character
+                for row_idx in range(3):
+                    if draw_x < max_x - 6:
+                        safe_addstr(stdscr, start_y + row_idx, draw_x, glyph[row_idx], color)
+
+                if char_pos == letter_offset_in_word:
+                    cursor_screen_y = start_y + 1
+                    cursor_screen_x = draw_x
+
+                draw_x += 4  # glyph width + spacing
+
+            if letter_offset_in_word >= len(active_word):
+                cursor_screen_y = start_y + 1
+                cursor_screen_x = draw_x
+
+            # Show next word faded
+            if next_word:
+                next_label = f"NEXT WORD:  {next_word}"
+                safe_addstr(stdscr, 10, 4, next_label, c_faded | curses.A_BOLD)
+
+            # Full sentence context preview below
+            preview_y = 12
+            safe_addstr(stdscr, preview_y, 4, "Full Sentence Context:", c_cyan)
+            preview_width = max(30, max_x - 8)
+
+            char_positions, total_rows = build_char_positions(engine.target_text, preview_width)
+            if curr_idx in char_positions:
+                active_row = char_positions[curr_idx][0]
             else:
-                # Upcoming text ("another word but faded") -> FADED
-                safe_addstr(stdscr, screen_y, screen_x, target_ch, c_faded)
+                active_row = 0
 
-        # Draw extra typed characters beyond target text in red
-        if curr_idx > len(engine.target_text):
-            for extra_i in range(len(engine.target_text), curr_idx):
-                extra_ch = engine.typed_chars[extra_i]
-                if screen_y < start_row + visible_lines:
-                    safe_addstr(stdscr, screen_y, screen_x + (extra_i - len(engine.target_text)) + 1, extra_ch, c_red | curses.A_BOLD)
+            scroll_offset = max(0, active_row - 1)
+            for i, target_ch in enumerate(engine.target_text):
+                if i not in char_positions:
+                    continue
+                r, c = char_positions[i]
+                line_on_screen = preview_y + 1 + (r - scroll_offset)
+                if line_on_screen >= max_y - 3:
+                    break
+                if line_on_screen < preview_y + 1:
+                    continue
 
-        # Position of the blinking cursor
-        cursor_screen_y = start_row + (active_row - scroll_offset)
-        cursor_screen_x = padding_left + active_col
+                if i < curr_idx:
+                    col_attr = c_green if engine.typed_chars[i] == target_ch else c_red
+                    safe_addstr(stdscr, line_on_screen, 4 + c, target_ch, col_attr)
+                else:
+                    safe_addstr(stdscr, line_on_screen, 4 + c, target_ch, c_faded)
+
+        else:
+            # ==========================================
+            # SPACIOUS MODE: Double line spacing & centered box
+            # ==========================================
+            wrap_width = max(30, min(max_x - 8, 80))
+            box_x = max(4, (max_x - wrap_width) // 2)
+
+            char_positions, total_rows = build_char_positions(engine.target_text, wrap_width)
+
+            if curr_idx in char_positions:
+                active_row, active_col = char_positions[curr_idx]
+            elif curr_idx > 0 and (curr_idx - 1) in char_positions:
+                prev_row, prev_col = char_positions[curr_idx - 1]
+                active_row, active_col = prev_row, prev_col + 1
+            else:
+                active_row, active_col = (0, 0)
+
+            # Double line spacing: line_step = 2
+            start_row = 5
+            scroll_offset = max(0, active_row - 1)
+            visible_rows = max(1, (max_y - start_row - 4) // 2)
+
+            cursor_screen_y = start_row + (active_row - scroll_offset) * 2
+            cursor_screen_x = box_x + active_col
+
+            for i, target_ch in enumerate(engine.target_text):
+                if i not in char_positions:
+                    continue
+
+                r, c = char_positions[i]
+                line_offset = r - scroll_offset
+                if line_offset < 0 or line_offset >= visible_rows:
+                    continue
+
+                screen_y = start_row + (line_offset * 2)  # Double-spaced rows!
+                screen_x = box_x + c
+
+                if i < curr_idx:
+                    typed_ch = engine.typed_chars[i]
+                    if typed_ch == target_ch:
+                        # Correct letter -> Vibrant Green
+                        safe_addstr(stdscr, screen_y, screen_x, target_ch, c_green)
+                    else:
+                        # Mistyped letter -> Vivid Red
+                        if typed_ch == ' ':
+                            safe_addstr(stdscr, screen_y, screen_x, "_", c_red | curses.A_REVERSE)
+                        else:
+                            safe_addstr(stdscr, screen_y, screen_x, typed_ch, c_red | curses.A_UNDERLINE)
+                else:
+                    # Upcoming text -> High-contrast light gray (never invisible)
+                    safe_addstr(stdscr, screen_y, screen_x, target_ch, c_faded)
 
         # Completion Card (Sprint Mode)
         if engine.completed:
-            card_y = min(max_y - 5, start_row + visible_lines + 1)
+            card_y = max_y - 5
             congrats = f"🏆 Sprint Finished! Speed: {stats['wpm']} WPM | Accuracy: {stats['accuracy']}% | Errors: {stats['mistakes']}"
             prompt = "Press [ENTER] for next sentence, [1] / [2] to change mode, or [ESC] to quit."
-            safe_addstr(stdscr, card_y, 4, congrats, c_yellow | curses.A_BOLD)
-            safe_addstr(stdscr, card_y + 1, 4, prompt, curses.A_BOLD)
+            safe_addstr(stdscr, card_y, 4, congrats, c_yellow)
+            safe_addstr(stdscr, card_y + 1, 4, prompt, c_white)
 
         # ==========================================
         # 4. FOOTER & SHORTCUTS
         # ==========================================
         footer_y = max_y - 2
         safe_addstr(stdscr, footer_y - 1, 2, "─" * (max_x - 4), c_faded)
-        controls = "[1/2 or Click] Switch Mode   [Backspace] Delete   [Ctrl+R] Reset   [ESC] Exit"
+        controls = "[1/2] Mode   [B] Big Font   [Space] Key   [Backspace] Fix   [Ctrl+R] Reset   [ESC] Exit   [Ctrl++: Zoom Terminal]"
         if engine.completed:
             controls = "[ENTER] Next Sentence   " + controls
         safe_addstr(stdscr, footer_y, 4, controls, c_cyan)
@@ -489,9 +642,14 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
             try:
                 _, mx, my, _, bstate = curses.getmouse()
                 if my == 0 and (bstate & (curses.BUTTON1_CLICKED | curses.BUTTON1_PRESSED | curses.BUTTON1_RELEASED)):
-                    for x_start, x_end, target_mode in top_buttons:
+                    for x_start, x_end, action in top_buttons:
                         if x_start <= mx <= x_end:
-                            engine.switch_mode(target_mode)
+                            if action == "SPRINT":
+                                engine.switch_mode("SPRINT")
+                            elif action == "ENDLESS":
+                                engine.switch_mode("ENDLESS")
+                            elif action == "TOGGLE_BIG":
+                                big_font = not big_font
                             break
             except curses.error:
                 pass
@@ -500,11 +658,11 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
         # Keyboard shortcuts
         if ch in (27, 3):  # ESC or Ctrl+C
             break
+        elif ch in (ord('b'), ord('B'), curses.KEY_F3) and (len(engine.typed_chars) == 0 or (curr_idx < len(engine.target_text) and engine.target_text[curr_idx] not in ('b', 'B'))):
+            big_font = not big_font
         elif ch == ord('1') and (len(engine.typed_chars) == 0 or (curr_idx < len(engine.target_text) and engine.target_text[curr_idx] != '1')):
-            # Switch to Sprint mode if not typing '1'
             engine.switch_mode("SPRINT")
         elif ch == ord('2') and (len(engine.typed_chars) == 0 or (curr_idx < len(engine.target_text) and engine.target_text[curr_idx] != '2')):
-            # Switch to Endless mode if not typing '2'
             engine.switch_mode("ENDLESS")
         elif ch == 9:  # TAB -> toggle mode
             next_mode = "ENDLESS" if engine.mode == "SPRINT" else "SPRINT"
@@ -534,12 +692,13 @@ def main():
                 * Comma and fullstop appear once every ~35 words
                 * Clean arbitrary words in between
 
-Interactive Controls:
-  Click [1] or [2] on the Top Bar with your mouse, or press 1 / 2 on your keyboard!
+Display Options:
+  --big, -b   - Launch with Big Font Mode (3-row giant ASCII letters)!
 """
     )
     parser.add_argument("-1", "--sprint", action="store_true", help="Launch directly in Sprint Mode (1-2 min WPM test)")
     parser.add_argument("-2", "--endless", action="store_true", help="Launch directly in Endless Mode (controlled practice)")
+    parser.add_argument("-b", "--big", action="store_true", help="Launch with Big Font Mode (giant letters)")
     parser.add_argument("custom", nargs="*", help="Optional custom text or sentence to practice")
 
     args = parser.parse_args()
@@ -553,7 +712,7 @@ Interactive Controls:
     custom_text = " ".join(args.custom) if args.custom else None
 
     try:
-        result = curses.wrapper(run_game, mode, custom_text)
+        result = curses.wrapper(run_game, mode, custom_text, args.big)
         final_stats, final_mode = result if result else (None, mode)
     except KeyboardInterrupt:
         final_stats, final_mode = None, mode
