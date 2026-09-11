@@ -78,6 +78,29 @@ SYMBOL_WORDS = [
     "is_valid_token?", "get_connection()", "print(\"hello\")", "result!=None"
 ]
 
+# 2-row clean font for increased word visibility
+FONT_2X = {
+    'a': ['▄▀▄', '█▄█'], 'b': ['█▀▄', '█▄▀'], 'c': [' ▄▀▀', ' ▀▄▄'], 'd': ['▄▀█', '▀▄█'],
+    'e': ['█▀▀', '▀▀▀'], 'f': ['▄█▀', ' █ '], 'g': ['▄▀█', ' ▀█'], 'h': ['█ █', '█▀█'],
+    'i': ['█', '█'],     'j': ['  █', '▀▄▀'], 'k': ['█ ▄', '█▀ '], 'l': ['█ ', '▀▀'],
+    'm': ['█▀█', '█ █'], 'n': ['█▀▄', '█ █'], 'o': ['▄▀▄', '▀▄▀'], 'p': ['█▀▄', '█▀ '],
+    'q': ['▄▀█', '  ▀'], 'r': ['█▀▄', '█  '], 's': ['▄▀ ', ' ▀▄'], 't': ['▀█▀', ' █ '],
+    'u': ['█ █', '▀▄▀'], 'v': ['█ █', ' ▀ '], 'w': ['█ █ █', '▀▄█▄▀'], 'x': ['▀▄▀', '▄▀▄'],
+    'y': ['█ █', ' ▀█'], 'z': ['▀▀█', '█▀▀'],
+    ' ': ['   ', '   '], '␣': ['   ', '▀▀▀'],
+    '.': [' ', '▄'],     ',': [' ', '▀'],     ':': ['▄', '▄'],     ';': ['▄', '▀'],
+    '-': ['▀▀', '  '],   '_': ['  ', '▀▀'],   '!': ['█', '▄'],     '?': ['▀█', ' ▄'],
+    '(': ['▄▀', '▀▄'],   ')': ['▀▄', '▄▀'],   '[': ['█▀', '█▄'],   ']': ['▀█', '▄█'],
+    '+': [' ▄ ', '▀█▀'], '=': ['▀▀', '▀▀'],   '/': [' ▄', '▄ '],   '\"': ['█ █', '   '],
+    '\'': ['█', ' '],    '#': ['█▀█', '▀█▀'],
+    '0': ['▄▀▄', '▀▄▀'], '1': ['▄█', ' █'],   '2': ['▀▀█', '█▀▀'], '3': ['▀▀█', '▀▀█'],
+    '4': ['█ █', '▀▀█'], '5': ['█▀▀', '▀▀█'], '6': ['█▀▀', '█▄█'], '7': ['▀▀█', '  █'],
+    '8': ['█▀█', '█▄█'], '9': ['█▀█', ' ▀█'],
+}
+
+def get_glyph(c):
+    return FONT_2X.get(c.lower(), [c, ' '])
+
 def format_time(seconds):
     mins = int(seconds) // 60
     secs = int(seconds) % 60
@@ -387,37 +410,87 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
         safe_addstr(stdscr, 3, 2, "─" * (max_x - 4), c_faded)
 
         # ==========================================
-        # 3. TYPING CANVAS (Spacious, bold, active-word focus)
+        # 3. TYPING CANVAS (Active Word in Increased Font + Flowing Context)
         # ==========================================
         curr_idx = len(engine.typed_chars)
         target = engine.target_text
 
-        # Locate active whole word boundaries
-        word_start = target.rfind(' ', 0, curr_idx) + 1 if curr_idx > 0 else 0
-        word_end = target.find(' ', curr_idx)
-        if word_end == -1:
-            word_end = len(target)
+        # Determine active whole word boundaries
+        if curr_idx < len(target) and target[curr_idx] == ' ':
+            word_start = curr_idx
+            word_end = curr_idx + 1
+            active_word = "␣"
+            letter_in_word = 0
+            is_space_active = True
+        else:
+            word_start = target.rfind(' ', 0, curr_idx) + 1 if curr_idx > 0 else 0
+            word_end = target.find(' ', curr_idx)
+            if word_end == -1:
+                word_end = len(target)
+            active_word = target[word_start:word_end]
+            letter_in_word = curr_idx - word_start
+            is_space_active = False
 
+        # --- A. Render the Active Word in Increased Size (Guide + 2-Row Font) ---
+        char_entries = []
+        for char_pos, ch in enumerate(active_word):
+            g = get_glyph(ch)
+            gw = max(len(g[0]), len(g[1]), 1)
+            char_entries.append((ch, g, gw))
+
+        total_word_w = sum(gw for _, _, gw in char_entries) + max(0, len(char_entries) - 1)
+        word_start_x = max(2, (max_x - total_word_w) // 2)
+        word_start_y = 4 if max_y < 22 else 5
+
+        draw_x = word_start_x
+        cursor_screen_x = word_start_x
+        cursor_screen_y = word_start_y + 1
+
+        for char_pos, (ch, g, gw) in enumerate(char_entries):
+            if char_pos < letter_in_word:
+                typed_ch = engine.typed_chars[word_start + char_pos]
+                if typed_ch == ch:
+                    col = c_green
+                    guide_char = ch
+                else:
+                    col = c_red
+                    guide_char = typed_ch if typed_ch != ' ' else '_'
+            elif char_pos == letter_in_word:
+                col = c_white
+                guide_char = ch if not is_space_active else '␣'
+                cursor_screen_x = draw_x + (gw // 2)
+                cursor_screen_y = word_start_y + 1
+            else:
+                col = c_faded
+                guide_char = ch
+
+            guide_str = guide_char.center(gw)
+            if draw_x < max_x - 2:
+                safe_addstr(stdscr, word_start_y, draw_x, guide_str, col | curses.A_BOLD)
+                safe_addstr(stdscr, word_start_y + 1, draw_x, g[0].ljust(gw), col | curses.A_BOLD)
+                safe_addstr(stdscr, word_start_y + 2, draw_x, g[1].ljust(gw), col | curses.A_BOLD)
+
+            draw_x += gw + 1
+
+        # --- B. Sentence Flow Context ---
+        context_divider_y = word_start_y + 3
+        safe_addstr(stdscr, context_divider_y, 2, "─" * (max_x - 4), c_faded)
+
+        text_start_y = context_divider_y + 1
         wrap_width = max(24, min(max_x - 6, 80))
         box_x = max(2, (max_x - wrap_width) // 2)
 
         char_positions, total_rows = build_char_positions(engine.target_text, wrap_width)
 
         if curr_idx in char_positions:
-            active_row, active_col = char_positions[curr_idx]
+            active_row = char_positions[curr_idx][0]
         elif curr_idx > 0 and (curr_idx - 1) in char_positions:
-            prev_row, prev_col = char_positions[curr_idx - 1]
-            active_row, active_col = prev_row, prev_col + 1
+            active_row = char_positions[curr_idx - 1][0]
         else:
-            active_row, active_col = (0, 0)
+            active_row = 0
 
-        # Double line spacing: line_step = 2
-        start_row = 4 if max_y < 16 else 5
         scroll_offset = max(0, active_row - 1)
-        visible_rows = max(1, (max_y - start_row - 4) // 2)
-
-        cursor_screen_y = start_row + (active_row - scroll_offset) * 2
-        cursor_screen_x = box_x + active_col
+        visible_rows = max(1, (max_y - text_start_y - 4) // 2)
 
         for i, target_ch in enumerate(engine.target_text):
             if i not in char_positions:
@@ -428,25 +501,21 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
             if line_offset < 0 or line_offset >= visible_rows:
                 continue
 
-            screen_y = start_row + (line_offset * 2)  # Double-spaced rows!
+            screen_y = text_start_y + (line_offset * 2)  # Double-spaced rows!
             screen_x = box_x + c
 
             if i < curr_idx:
                 typed_ch = engine.typed_chars[i]
                 if typed_ch == target_ch:
-                    # Correct letter -> Bold Neon Green
                     safe_addstr(stdscr, screen_y, screen_x, target_ch, c_green)
                 else:
-                    # Mistyped letter -> Bold Vivid Red
                     if typed_ch == ' ':
                         safe_addstr(stdscr, screen_y, screen_x, "_", c_red | curses.A_REVERSE)
                     else:
                         safe_addstr(stdscr, screen_y, screen_x, typed_ch, c_red | curses.A_UNDERLINE)
             elif word_start <= i < word_end:
-                # Active whole word: Bright bold white so the whole word stands out clearly
                 safe_addstr(stdscr, screen_y, screen_x, target_ch, c_white)
             else:
-                # Upcoming future words: Crisp bold light slate gray
                 safe_addstr(stdscr, screen_y, screen_x, target_ch, c_faded)
 
         # Completion Card (Sprint Mode)

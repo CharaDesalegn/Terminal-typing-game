@@ -6,7 +6,7 @@ A lightweight, responsive, and distraction-free terminal typing speed and practi
 
 ## 🔍 Visibility & Typography
 
-* **🔍 Active Whole-Word Focus:** The entire active word currently being typed is highlighted in bright bold white so it stands out immediately and is effortless to read.
+* **🔍 Increased Word Font (Words Only):** The active whole word currently being typed is rendered in a dedicated 2-row increased font with guide letters directly above, making the words easy to see and type without altering your terminal's normal font.
 * **📏 Double Line Spacing:** Generous empty lines between text rows for effortless reading and natural eye tracking.
 * **✨ High-Contrast Color Palette:**
   * **Vibrant Bold Neon Green:** Correct letters.
