@@ -338,18 +338,18 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
         # ==========================================
         # 1. TOP BAR (Clickable with mouse, 1, 2)
         # ==========================================
-        btn_sprint = "[ 1: ⚡ Sprint ]"
-        btn_endless = "[ 2: ♾️ Endless ]"
+        btn_sprint = "[ 1: Sprint ]" if max_x < 55 else "[ 1: ⚡ Sprint ]"
+        btn_endless = "[ 2: Endless ]" if max_x < 55 else "[ 2: ♾️ Endless ]"
 
         top_buttons = []
-        cur_btn_x = 2
+        cur_btn_x = 1 if max_x < 55 else 2
 
         # Button 1: Sprint
         is_sprint = (engine.mode == "SPRINT")
         sprint_attr = (curses.A_REVERSE | c_green) if is_sprint else c_white
         safe_addstr(stdscr, 0, cur_btn_x, btn_sprint, sprint_attr)
         top_buttons.append((cur_btn_x, cur_btn_x + len(btn_sprint), "SPRINT"))
-        cur_btn_x += len(btn_sprint) + 2
+        cur_btn_x += len(btn_sprint) + 1
 
         # Button 2: Endless
         is_endless = (engine.mode == "ENDLESS")
@@ -358,8 +358,9 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
         top_buttons.append((cur_btn_x, cur_btn_x + len(btn_endless), "ENDLESS"))
 
         # Right-aligned exit button
-        exit_label = "[ESC: Exit]"
-        safe_addstr(stdscr, 0, max_x - len(exit_label) - 2, exit_label, c_cyan)
+        exit_label = "[ESC]" if max_x < 55 else "[ESC: Exit]"
+        exit_x = max(cur_btn_x + len(btn_endless) + 1, max_x - len(exit_label) - 1)
+        safe_addstr(stdscr, 0, exit_x, exit_label, c_cyan)
 
         # Header divider
         safe_addstr(stdscr, 1, 2, "═" * (max_x - 4), c_cyan)
@@ -411,7 +412,7 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
             active_row, active_col = (0, 0)
 
         # Double line spacing: line_step = 2
-        start_row = 5
+        start_row = 4 if max_y < 16 else 5
         scroll_offset = max(0, active_row - 1)
         visible_rows = max(1, (max_y - start_row - 4) // 2)
 
@@ -461,10 +462,16 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
         # ==========================================
         footer_y = max_y - 2
         safe_addstr(stdscr, footer_y - 1, 2, "─" * (max_x - 4), c_faded)
-        controls = "[1/2] Mode   [Space] Key   [Backspace] Fix   [Ctrl+R] Reset   [ESC] Exit"
+        if max_x < 50:
+            controls = "[1/2] Mode  [Back] Fix  [ESC] Exit"
+        elif max_x < 65:
+            controls = "[1/2] Mode  [Back] Fix  [Ctrl+R] Reset  [ESC] Exit"
+        else:
+            controls = "[1/2] Mode   [Space] Key   [Backspace] Fix   [Ctrl+R] Reset   [ESC] Exit"
         if engine.completed:
-            controls = "[ENTER] Next Sentence   " + controls
-        safe_addstr(stdscr, footer_y, 4, controls, c_cyan)
+            controls = "[ENTER] Next  " + controls
+        safe_addstr(stdscr, footer_y, 2, controls, c_cyan)
+
 
         # Move terminal cursor to active position
         try:

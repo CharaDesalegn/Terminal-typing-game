@@ -7,5 +7,9 @@ while [ -h "$SOURCE" ]; do
   [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
 done
 DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+# Trigger Ghostty config reload so updated font size applies immediately
+if [ -n "$GHOSTTY_BIN_DIR" ] || [ "$TERM_PROGRAM" = "ghostty" ]; then
+  pkill -USR2 -u "$USER" -x ghostty 2>/dev/null || true
+fi
 
 exec python3 "$DIR/main.py" "$@"
