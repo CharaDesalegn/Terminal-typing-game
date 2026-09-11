@@ -5,7 +5,11 @@ Features:
 - Character-by-character precision: Space is treated just like any other key (never skips words).
 - Live color coding: Correct letters are GREEN, mistyped letters are RED, upcoming text is FADED.
 - Mode 1 (Sprint): Simple sentences to test your WPM in 1-2 minutes.
-- Mode 2 (Endless): Continuous endless typing stream with complex vocabulary and code symbols.
+- Mode 2 (Endless): Continuous practice with controlled difficulty:
+    * Comma / Full stop: once every ~35 words (<= 50 words)
+    * Numbers: once every 100 words
+    * Special characters / symbols: once every 200 words
+    * All other words: arbitrary clean vocabulary
 - Interactive Top Bar: Clickable via mouse and selectable with keys [1], [2], or [TAB].
 - CLI Flags: --sprint (-1), --endless (-2), or custom practice text.
 """
@@ -30,25 +34,45 @@ SPRINT_SENTENCES = [
     "Clear writing usually reflects clear thinking. When you take the time to organize your ideas, others will understand your vision."
 ]
 
-# Mode 2: Advanced vocabulary, technical terms, symbols, and varied keys for mastery
-COMPLEX_WORDS_POOL = [
-    "extraordinary", "juxtaposition", "serendipity", "unprecedented", "crystallization",
-    "idiosyncratic", "equilibrium", "heterogeneous", "magnificent", "comprehensive",
-    "susceptibility", "counterintuitive", "acknowledgement", "quintessential", "resilience",
-    "infrastructure", "philosophical", "metamorphosis", "synchronization", "perspicacity",
-    "conscientious", "disproportionate", "incompatibility", "characteristically", "anachronism",
-    "ubiquitous", "circumlocution", "idiosyncrasy", "reconnaissance", "photosynthesis",
-    "asynchronous", "polymorphism", "concurrency", "cryptography", "microservices",
-    "virtualization", "encapsulation", "reconciliation", "authentication", "authorization",
-    "multithreading", "serialization", "containerization", "backpropagation", "hyperparameter",
-    "orchestration", "deterministic", "subroutines", "idempotent", "decoupling",
-    "observability", "maintainability", "declarative", "imperative", "distributed",
+# Mode 2 (Endless): Arbitrary English words (pure letters, varied lengths)
+BASE_WORDS_POOL = [
+    "system", "method", "network", "stream", "thread", "buffer", "server", "packet",
+    "socket", "engine", "device", "screen", "cursor", "signal", "filter", "matrix",
+    "vector", "string", "number", "symbol", "action", "result", "status", "target",
+    "source", "window", "border", "layout", "canvas", "player", "reward", "domain",
+    "record", "column", "header", "footer", "script", "binary", "branch", "commit",
+    "origin", "master", "remote", "portal", "access", "secure", "cipher", "secret",
+    "future", "memory", "syntax", "parser", "render", "update", "reload", "listen",
+    "events", "notify", "prompt", "dialog", "option", "toggle", "button", "metric",
+    "timing", "smooth", "energy", "flight", "vision", "nature", "planet", "cosmos",
+    "galaxy", "season", "spring", "summer", "autumn", "winter", "forest", "valley",
+    "canyon", "bridge", "castle", "island", "harbor", "beacon", "anchor", "summit",
+    "shadow", "riddle", "wonder", "silence", "whisper", "journey", "courage", "balance",
+    "clarity", "freedom", "passion", "harmony", "purpose", "triumph", "destiny", "horizon",
+    "dynamic", "illuminate", "understand", "experience", "appreciate", "collaborate",
+    "discipline", "coordinate", "articulate", "synthesize", "strengthen", "accelerate",
+    "navigation", "generation", "foundation", "resolution", "connection", "expression",
+    "reflection", "dedication", "innovation", "atmosphere", "temperature", "equilibrium",
+    "resilience", "phenomenon", "leadership", "fellowship", "creativity", "curiosity",
+    "simplicity", "efficiency", "confidence", "perseverance", "inspiration", "fascinating",
+    "extraordinary", "magnificent", "comprehensive", "philosophical", "metamorphosis",
+    "synchronization", "perspicacity", "serendipity", "unprecedented", "crystallization",
+    "algorithm", "knowledge", "practice", "challenge", "discovery", "performance", "focus"
+]
+
+# Numbers: Appears once every 100 words
+NUMBER_WORDS = [
+    "100", "2026", "42", "365", "1984", "500", "24", "7", "1000",
+    "version2", "level5", "page12", "top10", "stage3", "rank1",
+    "step4", "room101", "route66", "year2030", "chapter8"
+]
+
+# Special characters and symbols: Appears once every 200 words
+SYMBOL_WORDS = [
     "calculate_sum()", "UserAuth.verify()", "data_stream.pipe()", "item_list[index]",
-    "config_options", "max_capacity_limit", "response.status_code", "process_id#99",
-    "lambda_handler()", "matrix_multiply()", "format_output()", "query_param:value",
-    "is_valid_token?", "read_buffer_bytes()", "retry_interval_ms", "get_connection_pool()",
-    "Vector3D.normalize()", "filter_records()", "total_count+=1", "error_message.strip()",
-    "TypeScript", "PostgreSQL", "Kubernetes", "WebSockets", "JavaScript"
+    "lambda_handler()", "read_buffer_bytes()", "key:value", "total_count+=1",
+    "process_id#99", "config_options", "Vector3D.normalize()", "format_output()",
+    "is_valid_token?", "get_connection()", "print(\"hello\")", "result!=None"
 ]
 
 def format_time(seconds):
@@ -60,15 +84,47 @@ class TypingEngine:
     def __init__(self, mode="SPRINT", custom_text=None):
         self.mode = mode
         self.custom_text = custom_text
+        self.endless_word_counter = 0
         self.reset()
 
+    def _generate_endless_word(self, index):
+        """
+        Difficulty pacing for Endless Mode:
+        - Special characters / symbols: once every 200 words
+        - Numbers: once every 100 words
+        - Full stop or comma: once every 35 words (<= 50 words)
+        - Others: arbitrary clean English words
+        """
+        word_num = index + 1
+        if word_num % 200 == 0:
+            return random.choice(SYMBOL_WORDS)
+        elif word_num % 100 == 0:
+            return random.choice(NUMBER_WORDS)
+
+        base = random.choice(BASE_WORDS_POOL)
+        if word_num % 35 == 0:
+            punct = random.choice([",", "."])
+            return base + punct
+
+        return base
+
+    def generate_endless_batch(self, count=35):
+        words = []
+        for _ in range(count):
+            w = self._generate_endless_word(self.endless_word_counter)
+            self.endless_word_counter += 1
+            words.append(w)
+        return " ".join(words)
+
     def reset(self):
+        self.endless_word_counter = 0
+
         if self.custom_text:
             self.target_text = self.custom_text.strip()
         elif self.mode == "SPRINT":
             self.target_text = random.choice(SPRINT_SENTENCES)
         elif self.mode == "ENDLESS":
-            self.target_text = " ".join(random.sample(COMPLEX_WORDS_POOL, min(35, len(COMPLEX_WORDS_POOL))))
+            self.target_text = self.generate_endless_batch(40)
         else:
             self.target_text = ""
 
@@ -97,7 +153,7 @@ class TypingEngine:
         # In Endless Mode, stream more words dynamically as the player nears the end
         if self.mode == "ENDLESS":
             if len(self.typed_chars) > len(self.target_text) - 120:
-                more_words = " " + " ".join(random.sample(COMPLEX_WORDS_POOL, 25))
+                more_words = " " + self.generate_endless_batch(25)
                 self.target_text += more_words
 
         # In Sprint Mode, finish when all characters in the sentence are typed
@@ -350,6 +406,8 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
         visible_lines = min(max_y - 9, total_rows - scroll_offset)
 
         # Draw each character of the target text
+        screen_y = start_row
+        screen_x = padding_left
         for i, target_ch in enumerate(engine.target_text):
             if i not in char_positions:
                 continue
@@ -371,7 +429,6 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
                 else:
                     # Error letter -> RED
                     if typed_ch == ' ':
-                        # User pressed space when a letter was expected
                         safe_addstr(stdscr, screen_y, screen_x, "_", c_red | curses.A_BOLD | curses.A_UNDERLINE)
                     else:
                         safe_addstr(stdscr, screen_y, screen_x, typed_ch, c_red | curses.A_BOLD | curses.A_UNDERLINE)
@@ -383,7 +440,6 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
         if curr_idx > len(engine.target_text):
             for extra_i in range(len(engine.target_text), curr_idx):
                 extra_ch = engine.typed_chars[extra_i]
-                # Draw at the end
                 if screen_y < start_row + visible_lines:
                     safe_addstr(stdscr, screen_y, screen_x + (extra_i - len(engine.target_text)) + 1, extra_ch, c_red | curses.A_BOLD)
 
@@ -461,7 +517,6 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
             if engine.completed:
                 engine.reset()
         elif 32 <= ch <= 126:  # Printable ASCII characters (INCLUDING SPACE 32!)
-            # Space is treated just like any other key: does NOT skip words!
             engine.add_char(chr(ch))
 
     return last_stats, engine.mode
@@ -473,14 +528,18 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Modes:
   1: Sprint   - Simple, natural sentences you finish in 1-2 minutes to test your WPM.
-  2: Endless  - Endless complex words, technical symbols, and tricky keys to build speed.
+  2: Endless  - Endless session with controlled frequency:
+                * Numbers appear once every 100 words
+                * Special symbols appear once every 200 words
+                * Comma and fullstop appear once every ~35 words
+                * Clean arbitrary words in between
 
 Interactive Controls:
   Click [1] or [2] on the Top Bar with your mouse, or press 1 / 2 on your keyboard!
 """
     )
     parser.add_argument("-1", "--sprint", action="store_true", help="Launch directly in Sprint Mode (1-2 min WPM test)")
-    parser.add_argument("-2", "--endless", action="store_true", help="Launch directly in Endless Mode (complex words practice)")
+    parser.add_argument("-2", "--endless", action="store_true", help="Launch directly in Endless Mode (controlled practice)")
     parser.add_argument("custom", nargs="*", help="Optional custom text or sentence to practice")
 
     args = parser.parse_args()
