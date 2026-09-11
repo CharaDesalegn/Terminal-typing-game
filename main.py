@@ -1,13 +1,33 @@
 #!/usr/bin/env python3
 """
 Terminal Typing Game (ttyping)
-A lightweight, responsive terminal typing speed and practice game.
+A responsive terminal typing game featuring real-time word streaming,
+faded ghost/target words, live WPM, CPM, and accuracy tracking.
 """
 
 import sys
 import time
 import random
 import curses
+
+# Common English and programming words for the typing stream
+WORD_POOL = [
+    "the", "be", "to", "of", "and", "a", "in", "that", "have", "it",
+    "for", "not", "on", "with", "he", "as", "you", "do", "at", "this",
+    "but", "his", "by", "from", "they", "we", "say", "her", "she", "or",
+    "an", "will", "my", "one", "all", "would", "there", "their", "what",
+    "so", "up", "out", "if", "about", "who", "get", "which", "go", "me",
+    "when", "make", "can", "like", "time", "no", "just", "him", "know",
+    "take", "people", "into", "year", "your", "good", "some", "could",
+    "them", "see", "other", "than", "then", "now", "look", "only", "come",
+    "its", "over", "think", "also", "back", "after", "use", "two", "how",
+    "our", "work", "first", "well", "way", "even", "new", "want", "because",
+    "any", "these", "give", "day", "most", "us", "code", "game", "system",
+    "terminal", "type", "fast", "speed", "test", "run", "key", "press",
+    "screen", "world", "write", "read", "build", "play", "great", "cool",
+    "light", "line", "word", "hand", "mind", "learn", "quick", "clean",
+    "create", "focus", "flow", "open", "input", "start", "stop", "power"
+]
 
 QUOTES = [
     "The quick brown fox jumps over the lazy dog.",
@@ -18,8 +38,7 @@ QUOTES = [
     "Any fool can write code that a computer can understand. Good programmers write code that humans can understand.",
     "In programming, the best code is no code at all.",
     "Experience is the name everyone gives to their mistakes.",
-    "Knowledge is power, but practice makes perfect.",
-    "Stay hungry, stay foolish."
+    "Knowledge is power, but practice makes perfect."
 ]
 
 def format_time(seconds):
@@ -27,37 +46,31 @@ def format_time(seconds):
     secs = int(seconds) % 60
     return f"{mins:02d}:{secs:02d}"
 
-class TypingGame:
-    def __init__(self, custom_text=None):
-        self.custom_text = custom_text
-        self.mode = "CHALLENGE" if custom_text else "FREE"
+class WordTypingGame:
+    def __init__(self, words=None, mode="WORDS"):
+        self.mode = mode
+        self.preset_words = words
         self.reset()
 
     def reset(self):
-        self.typed_chars = []
+        if self.preset_words:
+            self.words = list(self.preset_words)
+        elif self.mode == "WORDS":
+            self.words = random.sample(WORD_POOL, 35)
+        elif self.mode == "QUOTES":
+            quote = random.choice(QUOTES)
+            self.words = quote.split()
+        else:
+            self.words = []
+
+        self.current_word_idx = 0
+        self.current_input = ""
         self.start_time = None
         self.end_time = None
         self.total_keystrokes = 0
-        self.mistakes = 0
+        self.correct_keystrokes = 0
+        self.word_results = {}  # idx -> True (correct) / False (incorrect)
         self.completed = False
-
-        if self.mode == "CHALLENGE":
-            if self.custom_text:
-                self.target_text = self.custom_text
-            else:
-                self.target_text = random.choice(QUOTES)
-        else:
-            self.target_text = ""
-
-    def toggle_mode(self):
-        self.mode = "CHALLENGE" if self.mode == "FREE" else "FREE"
-        self.reset()
-
-    def next_challenge(self):
-        if not self.custom_text:
-            choices = [q for q in QUOTES if q != self.target_text]
-            self.target_text = random.choice(choices) if choices else random.choice(QUOTES)
-        self.reset()
 
     def add_char(self, char):
         if self.completed:
@@ -68,24 +81,54 @@ class TypingGame:
 
         self.total_keystrokes += 1
 
-        if self.mode == "CHALLENGE":
-            expected_idx = len(self.typed_chars)
-            if expected_idx < len(self.target_text):
-                expected_char = self.target_text[expected_idx]
-                if char != expected_char:
-                    self.mistakes += 1
-                self.typed_chars.append(char)
-                if len(self.typed_chars) == len(self.target_text):
-                    self.completed = True
-                    self.end_time = time.time()
+        if self.mode in ("WORDS", "QUOTES"):
+            if self.current_word_idx < len(self.words):
+                target_word = self.words[self.current_word_idx]
+                target_char_idx = len(self.current_input)
+                if target_char_idx < len(target_word) and char == target_word[target_char_idx]:
+                    self.correct_keystrokes += 1
+                self.current_input += char
         else:
-            self.typed_chars.append(char)
+            # Free typing mode
+            self.current_input += char
+            self.correct_keystrokes += 1
+
+    def handle_space(self):
+        if self.completed or self.mode not in ("WORDS", "QUOTES"):
+            return
+
+        if not self.current_input:
+            return
+
+        if self.start_time is None:
+            self.start_time = time.time()
+
+        self.total_keystrokes += 1
+        target_word = self.words[self.current_word_idx]
+        is_match = (self.current_input == target_word)
+        if is_match:
+            self.correct_keystrokes += 1
+
+        self.word_results[self.current_word_idx] = is_match
+        self.current_word_idx += 1
+        self.current_input = ""
+
+        if self.current_word_idx >= len(self.words):
+            self.completed = True
+            self.end_time = time.time()
 
     def backspace(self):
         if self.completed:
             return
-        if self.typed_chars:
-            self.typed_chars.pop()
+        if self.current_input:
+            self.current_input = self.current_input[:-1]
+        elif self.current_word_idx > 0 and self.mode in ("WORDS", "QUOTES"):
+            # Allow backspacing into previous word if it was marked incorrect
+            prev_idx = self.current_word_idx - 1
+            if not self.word_results.get(prev_idx, True):
+                self.current_word_idx = prev_idx
+                self.current_input = self.words[prev_idx]
+                del self.word_results[prev_idx]
 
     def get_elapsed_time(self):
         if self.start_time is None:
@@ -98,38 +141,31 @@ class TypingGame:
         elapsed = self.get_elapsed_time()
         minutes = elapsed / 60.0 if elapsed > 0 else 0.0
 
-        num_chars = len(self.typed_chars)
-        text = "".join(self.typed_chars)
-        words = len(text.split())
+        # Completed words chars + current input chars
+        completed_chars = sum(len(self.words[i]) + 1 for i in range(self.current_word_idx))
+        total_typed_chars = completed_chars + len(self.current_input)
 
         if minutes > 0:
-            wpm = (num_chars / 5.0) / minutes
-            cpm = num_chars / minutes
+            wpm = (self.correct_keystrokes / 5.0) / minutes
+            cpm = self.correct_keystrokes / minutes
         else:
             wpm = 0.0
             cpm = 0.0
 
-        if self.mode == "CHALLENGE":
-            correct_count = sum(
-                1 for i, c in enumerate(self.typed_chars)
-                if i < len(self.target_text) and c == self.target_text[i]
-            )
-            accuracy = (correct_count / self.total_keystrokes * 100.0) if self.total_keystrokes > 0 else 100.0
-        else:
-            accuracy = 100.0
+        accuracy = (self.correct_keystrokes / self.total_keystrokes * 100.0) if self.total_keystrokes > 0 else 100.0
 
         return {
             "elapsed": elapsed,
             "wpm": round(wpm, 1),
             "cpm": round(cpm, 1),
-            "chars": num_chars,
-            "words": words,
             "accuracy": round(accuracy, 1),
-            "completed": self.completed
+            "words_completed": self.current_word_idx,
+            "total_words": len(self.words),
+            "completed": self.completed,
+            "keystrokes": self.total_keystrokes
         }
 
 def safe_addstr(stdscr, y, x, text, attr=0):
-    """Safely write to curses screen within bounds without crashing on window edges."""
     max_y, max_x = stdscr.getmaxyx()
     if y < 0 or y >= max_y or x < 0 or x >= max_x:
         return
@@ -150,8 +186,8 @@ def run_game(stdscr, custom_text=None):
     stdscr.nodelay(True)
     stdscr.keypad(True)
 
-    # Initialize colors if terminal supports them
-    c_cyan = c_green = c_red = c_yellow = c_gray = c_dim = 0
+    # Color configuration
+    c_cyan = c_green = c_red = c_yellow = c_faded = c_bold_white = 0
     if curses.has_colors():
         curses.start_color()
         try:
@@ -159,18 +195,31 @@ def run_game(stdscr, custom_text=None):
             curses.init_pair(1, curses.COLOR_CYAN, -1)
             curses.init_pair(2, curses.COLOR_GREEN, -1)
             curses.init_pair(3, curses.COLOR_RED, -1)
-            curses.init_pair(4, curses.COLOR_YELLOW, -1)
-            curses.init_pair(5, curses.COLOR_WHITE, -1)
+            curses.init_pair(5, curses.COLOR_YELLOW, -1)
+            curses.init_pair(6, curses.COLOR_WHITE, -1)
+
+            # High quality faded color (dark gray)
+            if curses.COLORS >= 256:
+                curses.init_pair(4, 244, -1)
+                c_faded = curses.color_pair(4)
+            else:
+                curses.init_pair(4, curses.COLOR_BLACK, -1)
+                c_faded = curses.color_pair(4) | curses.A_BOLD | curses.A_DIM
+
             c_cyan = curses.color_pair(1)
             c_green = curses.color_pair(2)
             c_red = curses.color_pair(3)
-            c_yellow = curses.color_pair(4)
-            c_white = curses.color_pair(5)
-            c_dim = c_white | curses.A_DIM
+            c_yellow = curses.color_pair(5)
+            c_bold_white = curses.color_pair(6) | curses.A_BOLD
         except curses.error:
             pass
 
-    game = TypingGame(custom_text)
+    # Default fallback for faded text
+    if not c_faded:
+        c_faded = curses.A_DIM
+
+    preset = custom_text.split() if custom_text else None
+    game = WordTypingGame(words=preset, mode="WORDS" if not preset else "CUSTOM")
     last_stats = None
 
     while True:
@@ -178,12 +227,12 @@ def run_game(stdscr, custom_text=None):
         max_y, max_x = stdscr.getmaxyx()
 
         if max_y < 12 or max_x < 50:
-            safe_addstr(stdscr, 1, 2, "Please expand terminal window...", curses.A_BOLD)
+            safe_addstr(stdscr, 1, 2, "Please enlarge terminal window...", curses.A_BOLD)
             stdscr.refresh()
             time.sleep(0.1)
             try:
                 ch = stdscr.getch()
-                if ch in (27, 3):  # ESC or Ctrl+C
+                if ch in (27, 3):
                     break
             except curses.error:
                 pass
@@ -198,115 +247,122 @@ def run_game(stdscr, custom_text=None):
         safe_addstr(stdscr, 1, 2, "═" * (max_x - 4), c_cyan)
 
         # Mode & Live Stats Bar
-        mode_str = f" Mode: {game.mode} "
-        safe_addstr(stdscr, 2, 2, mode_str, curses.A_REVERSE | (c_yellow if game.mode == 'FREE' else c_green))
+        mode_badge = f" {game.mode} "
+        safe_addstr(stdscr, 2, 2, mode_badge, curses.A_REVERSE | c_yellow)
 
         time_str = f"⏱ Time: {format_time(stats['elapsed'])}"
         wpm_str = f"⚡ WPM: {stats['wpm']}"
         cpm_str = f"CPM: {stats['cpm']}"
-        chars_str = f"Chars: {stats['chars']}"
-        words_str = f"Words: {stats['words']}"
-        
-        stat_line = f"{time_str}   {wpm_str}   {cpm_str}   {chars_str}   {words_str}"
-        if game.mode == "CHALLENGE":
-            stat_line += f"   Acc: {stats['accuracy']}%"
+        acc_str = f"Acc: {stats['accuracy']}%"
+        prog_str = f"Word: {stats['words_completed']}/{stats['total_words']}"
 
-        safe_addstr(stdscr, 2, 18, stat_line, curses.A_BOLD)
-        safe_addstr(stdscr, 3, 2, "─" * (max_x - 4), c_dim)
+        stat_bar = f"{time_str}   {wpm_str}   {cpm_str}   {acc_str}   {prog_str}"
+        safe_addstr(stdscr, 2, 14, stat_bar, curses.A_BOLD)
+        safe_addstr(stdscr, 3, 2, "─" * (max_x - 4), c_faded)
 
-        # Content Area
+        # Word stream area with faded upcoming words
         start_row = 5
+        wrap_width = max(30, max_x - 8)
+        padding_left = 4
+
+        # Calculate word wrapping and coordinates
+        lines = []
+        current_line = []
+        current_len = 0
+        word_positions = {}
+
+        for idx, w in enumerate(game.words):
+            w_len = len(w) + 1  # word length plus trailing space
+            if current_len + len(w) > wrap_width and current_line:
+                lines.append(current_line)
+                current_line = []
+                current_len = 0
+
+            row = len(lines)
+            col = current_len
+            word_positions[idx] = (row, col)
+            current_line.append((idx, w))
+            current_len += w_len
+
+        if current_line:
+            lines.append(current_line)
+
+        # Determine scroll offset so current word is always visible on line 1 or 2
+        active_row = word_positions.get(game.current_word_idx, (0, 0))[0]
+        scroll_offset = max(0, active_row - 1)
+        visible_lines = min(max_y - 9, len(lines) - scroll_offset)
+
         cursor_y = start_row
-        cursor_x = 4
+        cursor_x = padding_left
 
-        if game.mode == "FREE":
-            safe_addstr(stdscr, 4, 4, "Type anything you want below:", c_yellow | curses.A_BOLD)
+        # Render visible word lines
+        for line_idx in range(scroll_offset, scroll_offset + visible_lines):
+            screen_y = start_row + (line_idx - scroll_offset)
+            if line_idx >= len(lines):
+                break
 
-            # Render typed text with line wrapping
-            text = "".join(game.typed_chars)
-            wrap_width = max(20, max_x - 8)
+            line_items = lines[line_idx]
+            for w_idx, w_text in line_items:
+                w_row, w_col = word_positions[w_idx]
+                screen_x = padding_left + w_col
 
-            curr_y = start_row
-            curr_x = 4
-            paragraphs = text.split("\n")
-            for p_idx, paragraph in enumerate(paragraphs):
-                if p_idx > 0:
-                    curr_y += 1
-                    curr_x = 4
+                if w_idx < game.current_word_idx:
+                    # Completed word
+                    is_correct = game.word_results.get(w_idx, True)
+                    color = c_green if is_correct else c_red
+                    safe_addstr(stdscr, screen_y, screen_x, w_text, color)
+                    safe_addstr(stdscr, screen_y, screen_x + len(w_text), " ", c_faded)
 
-                idx = 0
-                if len(paragraph) == 0:
-                    continue
+                elif w_idx == game.current_word_idx:
+                    # Current active word being typed
+                    curr_input = game.current_input
+                    typed_len = len(curr_input)
+                    target_len = len(w_text)
 
-                while idx < len(paragraph):
-                    chunk = paragraph[idx:idx + wrap_width]
-                    if curr_y < max_y - 4:
-                        safe_addstr(stdscr, curr_y, curr_x, chunk, curses.A_BOLD)
-                    curr_x = 4 + len(chunk)
-                    idx += wrap_width
-                    if idx < len(paragraph):
-                        curr_y += 1
-                        curr_x = 4
+                    # Characters already typed
+                    for char_idx in range(typed_len):
+                        draw_x = screen_x + char_idx
+                        if char_idx < target_len:
+                            if curr_input[char_idx] == w_text[char_idx]:
+                                safe_addstr(stdscr, screen_y, draw_x, curr_input[char_idx], c_green | curses.A_BOLD)
+                            else:
+                                safe_addstr(stdscr, screen_y, draw_x, curr_input[char_idx], c_red | curses.A_UNDERLINE | curses.A_BOLD)
+                        else:
+                            # Overflow characters beyond word length
+                            safe_addstr(stdscr, screen_y, draw_x, curr_input[char_idx], c_red | curses.A_BOLD)
 
-            cursor_y = curr_y
-            cursor_x = curr_x
+                    # Remaining untyped characters of current word (FADED)
+                    for char_idx in range(typed_len, target_len):
+                        draw_x = screen_x + char_idx
+                        safe_addstr(stdscr, screen_y, draw_x, w_text[char_idx], c_faded)
 
-            # Placeholder prompt if nothing typed yet
-            if not game.typed_chars:
-                safe_addstr(stdscr, start_row, 4, "Start typing here...", c_dim)
-                cursor_y = start_row
-                cursor_x = 4
+                    # Space after current word (FADED)
+                    trailing_space_x = screen_x + max(typed_len, target_len)
+                    safe_addstr(stdscr, screen_y, trailing_space_x, " ", c_faded)
 
-        elif game.mode == "CHALLENGE":
-            safe_addstr(stdscr, 4, 4, "Target Text (type matching characters):", c_green | curses.A_BOLD)
+                    # Position cursor right after the typed character
+                    cursor_y = screen_y
+                    cursor_x = screen_x + typed_len
 
-            target = game.target_text
-            typed = "".join(game.typed_chars)
-            wrap_width = max(20, max_x - 8)
-
-            row = start_row
-            col = 4
-
-            for i, ch in enumerate(target):
-                # Calculate current position
-                if i > 0 and (i % wrap_width) == 0:
-                    row += 1
-                    col = 4
-
-                if row >= max_y - 4:
-                    break
-
-                if i < len(typed):
-                    if typed[i] == ch:
-                        safe_addstr(stdscr, row, col, ch, c_green | curses.A_BOLD)
-                    else:
-                        safe_addstr(stdscr, row, col, typed[i], c_red | curses.A_UNDERLINE | curses.A_BOLD)
                 else:
-                    safe_addstr(stdscr, row, col, ch, c_dim)
+                    # Upcoming words ("another word but with a little bit faded")
+                    safe_addstr(stdscr, screen_y, screen_x, w_text, c_faded)
+                    safe_addstr(stdscr, screen_y, screen_x + len(w_text), " ", c_faded)
 
-                if i == len(typed):
-                    cursor_y = row
-                    cursor_x = col
-
-                col += 1
-
-            if len(typed) >= len(target):
-                cursor_y = row
-                cursor_x = col
-
-            if game.completed:
-                congrats = "🎉 Challenge Completed! Press [ENTER] for next, or [ESC] to exit."
-                safe_addstr(stdscr, row + 2, 4, congrats, c_yellow | curses.A_BOLD)
+        # Completion Banner
+        if game.completed:
+            congrats = "🎉 Round Finished! Press [ENTER] for new words, or [ESC] to view final stats."
+            safe_addstr(stdscr, start_row + visible_lines + 2, 4, congrats, c_yellow | curses.A_BOLD)
 
         # Bottom Bar & Controls
         footer_y = max_y - 2
-        safe_addstr(stdscr, footer_y - 1, 2, "─" * (max_x - 4), c_dim)
-        controls = "[ESC] Quit   [TAB] Switch Mode   [Ctrl+R] Reset   [Backspace] Delete"
-        if game.completed and game.mode == "CHALLENGE":
-            controls = "[ENTER] Next Challenge   " + controls
+        safe_addstr(stdscr, footer_y - 1, 2, "─" * (max_x - 4), c_faded)
+        controls = "[ESC] Quit   [Space] Next Word   [Backspace] Delete   [Ctrl+R] Reset   [TAB] Mode"
+        if game.completed:
+            controls = "[ENTER] New Round   " + controls
         safe_addstr(stdscr, footer_y, 4, controls, c_cyan)
 
-        # Place the physical terminal cursor at active typing position
+        # Move terminal cursor to current typing position
         try:
             if 0 <= cursor_y < max_y and 0 <= cursor_x < max_x:
                 stdscr.move(cursor_y, cursor_x)
@@ -315,7 +371,7 @@ def run_game(stdscr, custom_text=None):
 
         stdscr.refresh()
 
-        # Handle input with non-blocking timeout
+        # Non-blocking input loop
         try:
             ch = stdscr.getch()
         except curses.error:
@@ -325,21 +381,23 @@ def run_game(stdscr, custom_text=None):
             time.sleep(0.02)
             continue
 
-        # Check keys
+        # Handle user input
         if ch in (27, 3):  # ESC or Ctrl+C
             break
-        elif ch == 9:  # TAB -> toggle mode
-            game.toggle_mode()
-        elif ch in (18, 263, curses.KEY_F5):  # Ctrl+R or F5 -> reset
+        elif ch == 9:  # TAB -> Switch mode
+            new_mode = "QUOTES" if game.mode == "WORDS" else "WORDS"
+            game.mode = new_mode
+            game.reset()
+        elif ch in (18, 263, curses.KEY_F5):  # Ctrl+R or F5
             game.reset()
         elif ch in (curses.KEY_BACKSPACE, 127, 8, ord('\b')):
             game.backspace()
-        elif ch in (10, 13, curses.KEY_ENTER):  # Enter key
-            if game.completed and game.mode == "CHALLENGE":
-                game.next_challenge()
-            elif game.mode == "FREE":
-                game.add_char("\n")
-        elif 32 <= ch <= 126:  # Printable ASCII characters
+        elif ch == 32:  # Spacebar -> advances to next word
+            game.handle_space()
+        elif ch in (10, 13, curses.KEY_ENTER):
+            if game.completed:
+                game.reset()
+        elif 32 < ch <= 126:  # Printable ASCII characters
             game.add_char(chr(ch))
 
     return last_stats
@@ -354,17 +412,16 @@ def main():
     except KeyboardInterrupt:
         final_stats = None
 
-    # Print clean exit summary to terminal
+    # Print clean post-game exit summary to terminal
     print("\n" + "=" * 48)
     print("           TERMINAL TYPING GAME           ")
     print("=" * 48)
     if final_stats:
         print(f"  ⏱  Time Elapsed     : {format_time(final_stats['elapsed'])}")
-        print(f"  📝 Words Typed      : {final_stats['words']}")
-        print(f"  ⌨️  Characters Typed : {final_stats['chars']}")
+        print(f"  📝 Words Completed  : {final_stats['words_completed']} / {final_stats['total_words']}")
         print(f"  ⚡ Typing Speed     : {final_stats['wpm']} WPM ({final_stats['cpm']} CPM)")
-        if "accuracy" in final_stats:
-            print(f"  🎯 Accuracy         : {final_stats['accuracy']}%")
+        print(f"  🎯 Accuracy         : {final_stats['accuracy']}%")
+        print(f"  ⌨️  Keystrokes      : {final_stats['keystrokes']}")
     print("=" * 48)
     print("Thanks for playing! Run 'ttyping' anytime to play again.\n")
 
