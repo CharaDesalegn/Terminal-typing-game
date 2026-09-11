@@ -1,26 +1,36 @@
 # ⌨️ Terminal Typing Game (`ttyping`)
 
-A lightweight, responsive, and distraction-free terminal typing speed and practice game built in Python using standard `curses`. No external dependencies required!
+A lightweight, responsive, and distraction-free terminal typing speed and practice game built in Python using standard `curses`. Featuring real-time Monkeytype-style faded words, clickable mouse support, and multiple game modes.
 
 ---
 
-## 🚀 Features
+## 🎮 Game Modes
 
-- **Instant Terminal Launch:** Start typing immediately by running `ttyping` in your terminal.
-- **Two Game Modes:**
-  - **Free Typing Mode:** Type anything you want in the terminal freely! Track your words, characters, elapsed time, and real-time WPM.
-  - **Challenge Mode:** Practice against built-in quotes or supply your own custom sentence/text.
-- **Live Performance Dashboard:**
-  - ⏱ Elapsed Timer
-  - ⚡ Real-Time WPM (Words Per Minute)
-  - 📊 CPM (Characters Per Minute)
-  - 📝 Word Count & Character Count
-  - 🎯 Accuracy Percentage (Challenge Mode)
-- **Fluid Terminal Controls:** Backspace, text wrapping, terminal resizing support, and clean session exit summary.
+### 1. ⚡ Sprint Mode (WPM Test)
+* **Goal:** Test your typing speed in 1–2 minutes.
+* **Content:** Clean, natural everyday sentences (25–40 words).
+* **Finish:** Automatically concludes when the sentence is typed, presenting a completion card with your exact **WPM**, **Accuracy**, and **Time**.
+
+### 2. ♾️ Endless Mode (Mastery Practice)
+* **Goal:** Build finger dexterity, speed, and muscle memory across every row of the keyboard.
+* **Content:** An endless stream of complex vocabulary, technical terms, camelCase, snake_case, punctuation, and code constructs (e.g. `polymorphism`, `calculate_sum()`, `UserAuth.verify()`, `data_stream.pipe()`).
+* **Continuous Flow:** Words generate dynamically without stopping—you can type for hours! Tracks running WPM, total words completed, and streaks.
 
 ---
 
-## 📦 Quick Installation
+## 🕹️ Mode Selection: 3 Easy Ways
+
+1. **🖱️ Click with Your Mouse:** Click directly on `[ 1: ⚡ Sprint ]` or `[ 2: ♾️ Endless ]` on the top bar.
+2. **⌨️ Press Numbers:** Press **`1`** or **`2`** on your keyboard (or press **`TAB`** to toggle).
+3. **💻 CLI Flags:**
+   ```bash
+   ttyping --sprint     # Launch directly in Sprint Mode (or ttyping -1)
+   ttyping --endless    # Launch directly in Endless Mode (or ttyping -2)
+   ```
+
+---
+
+## 🚀 Quick Installation
 
 Run the install script to add `ttyping` to your local PATH (`~/.local/bin`):
 
@@ -29,32 +39,20 @@ chmod +x install.sh
 ./install.sh
 ```
 
-Ensure `~/.local/bin` is in your `$PATH` (standard on most Linux distributions).
-
 ---
 
-## 🎮 How to Play
+## ⌨️ Controls & Shortcuts
 
-### 1. Launch Free Typing Mode
-Type anything in the terminal freely:
-```bash
-ttyping
-```
-
-### 2. Launch with Custom Practice Text
-Pass any custom text as an argument to test your typing speed against it:
-```bash
-ttyping "The quick brown fox jumps over the lazy dog."
-```
-
-### Keyboard Shortcuts
-| Key | Action |
+| Key / Input | Action |
 | :--- | :--- |
-| **`TAB`** | Toggle between **Free Typing** and **Challenge** modes |
-| **`Backspace`** | Delete previous character |
-| **`Ctrl + R`** / **`F5`** | Reset current typing session |
-| **`ENTER`** | Start next challenge quote (when finished) / Newline |
-| **`ESC`** or **`Ctrl + C`** | Finish and view summary stats |
+| **Mouse Click** | Click on `[1]` or `[2]` in the top bar to switch modes |
+| **`1` / `2`** | Switch immediately between Sprint and Endless modes |
+| **`TAB`** | Toggle between modes |
+| **`Space`** | Advance to next word |
+| **`Backspace`** | Delete character / error |
+| **`Ctrl + R`** / **`F5`** | Restart current round |
+| **`ENTER`** | Start next sentence (after Sprint completion) |
+| **`ESC`** or **`Ctrl + C`** | Quit and view session summary |
 
 ---
 
@@ -62,7 +60,7 @@ ttyping "The quick brown fox jumps over the lazy dog."
 
 ```
 ├── ttyping        # Executable launcher script
-├── main.py        # Core curses game loop and logic
+├── main.py        # Core curses game loop, top-bar, and modes
 ├── install.sh     # Quick setup script
 ├── .gitignore     # Git ignore rules
 └── readme.md      # Documentation
