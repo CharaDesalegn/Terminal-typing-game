@@ -2,10 +2,10 @@
 """
 Terminal Typing Game (ttyping)
 Features:
-- Big Font Mode: Giant 3-row block letters for maximum visibility and readability!
+- Prominent Whole-Word Visibility: Clear, bold typography with active whole-word highlighting.
 - Spacious Centered Layout: Double line spacing, high-contrast colors, and generous margins.
-- High-Contrast Palette: Crisp light gray for upcoming text (no muddy/invisible dim text),
-  vibrant neon green for correct characters, and vivid bold red for errors.
+- High-Contrast Palette: Crisp light gray for upcoming text, bright bold white for the active
+  word, vibrant neon green for correct characters, and vivid bold red for errors.
 - Character Precision: Space is treated just like any other key (never skips words).
 - Mode 1 (Sprint): Simple sentences to test your WPM in 1-2 minutes.
 - Mode 2 (Endless): Continuous practice with controlled difficulty pacing:
@@ -13,8 +13,8 @@ Features:
     * Numbers: once every 100 words
     * Special characters / symbols: once every 200 words
     * All other words: arbitrary clean vocabulary
-- Interactive Top Bar: Clickable via mouse and selectable with keys [1], [2], [B], or [TAB].
-- CLI Flags: --sprint (-1), --endless (-2), --big (-b), or custom practice text.
+- Interactive Top Bar: Clickable via mouse and selectable with keys [1], [2], or [TAB].
+- CLI Flags: --sprint (-1), --endless (-2), or custom practice text.
 """
 
 import sys
@@ -77,68 +77,6 @@ SYMBOL_WORDS = [
     "process_id#99", "config_options", "Vector3D.normalize()", "format_output()",
     "is_valid_token?", "get_connection()", "print(\"hello\")", "result!=None"
 ]
-
-# 3-row large ASCII font dictionary
-FONT_3X3 = {
-    'a': [' ▄ ', '█▄█', '█ █'],
-    'b': ['█▀▄', '█▀▄', '▀▀ '],
-    'c': [' ▄▀', '█  ', ' ▀▄'],
-    'd': ['█▀▄', '█ █', '▀▀ '],
-    'e': ['█▀▀', '█▀▀', '▀▀▀'],
-    'f': ['█▀▀', '█▀ ', '▀  '],
-    'g': [' ▄▀', '█ ▀', ' ▀▄'],
-    'h': ['█ █', '█▀█', '█ █'],
-    'i': [' █ ', ' █ ', ' ▀ '],
-    'j': ['  █', '  █', '▀▀ '],
-    'k': ['█ ▄', '█▀ ', '█ ▀'],
-    'l': ['█  ', '█  ', '▀▀▀'],
-    'm': ['█▄█', '█ █', '█ █'],
-    'n': ['█▀▄', '█ █', '▀ ▀'],
-    'o': [' ▄ ', '█ █', ' ▀ '],
-    'p': ['█▀▄', '█▀▀', '▀  '],
-    'q': [' ▄ ', '█ █', ' ▀▄'],
-    'r': ['█▀▄', '█▀ ', '▀  '],
-    's': [' ▄▀', ' ▀▄', '▀▀ '],
-    't': ['▀█▀', ' █ ', ' ▀ '],
-    'u': ['█ █', '█ █', ' ▀ '],
-    'v': ['█ █', '█ █', ' ▀ '],
-    'w': ['█ █', '█ █', '▀▄▀'],
-    'x': ['▀▄▀', ' █ ', '▀▄▀'],
-    'y': ['█ █', ' ▀█', '▀▀ '],
-    'z': ['▀▀█', ' █ ', '█▀▀'],
-    '0': ['█▀█', '█ █', '▀▀▀'],
-    '1': [' ▄█', '  █', '  ▀'],
-    '2': ['▀▀█', ' ▄▀', '▀▀▀'],
-    '3': ['▀▀█', ' ▀▄', '▀▀▀'],
-    '4': ['█ █', '▀▀█', '  ▀'],
-    '5': ['█▀▀', '▀▀▄', '▀▀▀'],
-    '6': ['█▀▀', '█▀▄', '▀▀▀'],
-    '7': ['▀▀█', '  █', '  ▀'],
-    '8': ['█▀█', '█▀▄', '▀▀▀'],
-    '9': ['█▀█', '▀▀█', '  ▀'],
-    ' ': ['   ', '   ', '   '],
-    '.': ['   ', '   ', ' ▄ '],
-    ',': ['   ', ' ▄ ', '▀  '],
-    '(': [' ▄▀', ' █ ', ' ▀▄'],
-    ')': ['▀▄ ', ' █ ', '▄▀ '],
-    '[': ['▀▀ ', '█  ', '▀▀ '],
-    ']': [' ▀▀', '  █', ' ▀▀'],
-    ':': [' ▄ ', '   ', ' ▄ '],
-    ';': [' ▄ ', '   ', '▀  '],
-    '-': ['   ', '▀▀▀', '   '],
-    '_': ['   ', '   ', '▀▀▀'],
-    '+': [' ▄ ', '▀█▀', ' ▀ '],
-    '=': ['▀▀▀', '   ', '▀▀▀'],
-    '!': [' █ ', ' █ ', ' ▄ '],
-    '?': ['▀▀█', ' ▄▀', ' ▄ '],
-    '/': ['  ▄', ' ▄▀', '▄  '],
-    '"': ['█ █', '   ', '   '],
-    "'": [' █ ', '   ', '   '],
-    '#': ['█▀█', '▀█▀', '█ █'],
-}
-
-def get_glyph(char):
-    return FONT_3X3.get(char.lower(), [' █ ', ' █ ', ' █ '])
 
 def format_time(seconds):
     mins = int(seconds) // 60
@@ -322,7 +260,7 @@ def build_char_positions(text, wrap_width):
 
     return char_positions, cur_row + 1
 
-def run_game(stdscr, initial_mode="SPRINT", custom_text=None, start_big_font=False):
+def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
     try:
         curses.curs_set(1)
     except curses.error:
@@ -362,12 +300,12 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None, start_big_font=Fal
                 curses.init_pair(4, curses.COLOR_WHITE, -1)
                 curses.init_pair(7, curses.COLOR_YELLOW, -1)
 
-            c_cyan = curses.color_pair(1)
+            c_cyan = curses.color_pair(1) | curses.A_BOLD
             c_green = curses.color_pair(2) | curses.A_BOLD
             c_red = curses.color_pair(3) | curses.A_BOLD
-            c_faded = curses.color_pair(4)  # Clear, readable light gray
+            c_faded = curses.color_pair(4) | curses.A_BOLD  # Crisp, readable light gray (bold)
             c_yellow = curses.color_pair(5) | curses.A_BOLD
-            c_white = curses.color_pair(6) | curses.A_BOLD
+            c_white = curses.color_pair(6) | curses.A_BOLD  # Bright bold white for whole active word
             c_highlight = curses.color_pair(7) | curses.A_BOLD
         except curses.error:
             pass
@@ -376,7 +314,6 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None, start_big_font=Fal
         c_faded = curses.A_BOLD
 
     engine = TypingEngine(mode=initial_mode, custom_text=custom_text)
-    big_font = start_big_font
     last_stats = None
 
     while True:
@@ -399,11 +336,10 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None, start_big_font=Fal
         last_stats = stats
 
         # ==========================================
-        # 1. TOP BAR (Clickable with mouse, 1, 2, B)
+        # 1. TOP BAR (Clickable with mouse, 1, 2)
         # ==========================================
         btn_sprint = "[ 1: ⚡ Sprint ]"
         btn_endless = "[ 2: ♾️ Endless ]"
-        btn_big = f"[ B: 🔍 Big Font: {'ON ' if big_font else 'OFF'} ]"
 
         top_buttons = []
         cur_btn_x = 2
@@ -420,12 +356,6 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None, start_big_font=Fal
         endless_attr = (curses.A_REVERSE | c_yellow) if is_endless else c_white
         safe_addstr(stdscr, 0, cur_btn_x, btn_endless, endless_attr)
         top_buttons.append((cur_btn_x, cur_btn_x + len(btn_endless), "ENDLESS"))
-        cur_btn_x += len(btn_endless) + 2
-
-        # Button 3: Big Font Toggle
-        big_attr = (curses.A_REVERSE | c_cyan) if big_font else c_white
-        safe_addstr(stdscr, 0, cur_btn_x, btn_big, big_attr)
-        top_buttons.append((cur_btn_x, cur_btn_x + len(btn_big), "TOGGLE_BIG"))
 
         # Right-aligned exit button
         exit_label = "[ESC: Exit]"
@@ -450,155 +380,67 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None, start_big_font=Fal
         safe_addstr(stdscr, 3, 2, "─" * (max_x - 4), c_faded)
 
         # ==========================================
-        # 3. TYPING CANVAS (BIG FONT or SPACIOUS MODE)
+        # 3. TYPING CANVAS (Spacious, bold, active-word focus)
         # ==========================================
         curr_idx = len(engine.typed_chars)
+        target = engine.target_text
 
-        if big_font:
-            # ==========================================
-            # BIG FONT MODE: Giant 3-row block letters!
-            # ==========================================
-            # Locate active word boundaries
-            target = engine.target_text
-            # Find word start and end for current cursor
-            word_start = target.rfind(' ', 0, curr_idx) + 1 if curr_idx > 0 else 0
-            word_end = target.find(' ', curr_idx)
-            if word_end == -1:
-                word_end = len(target)
+        # Locate active whole word boundaries
+        word_start = target.rfind(' ', 0, curr_idx) + 1 if curr_idx > 0 else 0
+        word_end = target.find(' ', curr_idx)
+        if word_end == -1:
+            word_end = len(target)
 
-            active_word = target[word_start:word_end]
-            # Next word
-            next_start = word_end + 1 if word_end < len(target) else len(target)
-            next_end = target.find(' ', next_start)
-            if next_end == -1:
-                next_end = len(target)
-            next_word = target[next_start:next_end]
+        wrap_width = max(30, min(max_x - 8, 80))
+        box_x = max(4, (max_x - wrap_width) // 2)
 
-            # Header inside canvas
-            safe_addstr(stdscr, 4, 4, "CURRENT WORD (GIANT LETTERS):", curses.A_BOLD | c_cyan)
+        char_positions, total_rows = build_char_positions(engine.target_text, wrap_width)
 
-            # Render 3-row letters for the active word
-            start_y = 6
-            start_x = 4
-
-            letter_offset_in_word = curr_idx - word_start
-            draw_x = start_x
-
-            cursor_screen_y = start_y + 1
-            cursor_screen_x = start_x
-
-            for char_pos, ch in enumerate(active_word):
-                glyph = get_glyph(ch)
-
-                # Determine color of this character in the giant word
-                if char_pos < letter_offset_in_word:
-                    typed_ch = engine.typed_chars[word_start + char_pos]
-                    if typed_ch == ch:
-                        color = c_green
-                    else:
-                        color = c_red
-                else:
-                    color = c_faded
-
-                # Draw 3 rows for this character
-                for row_idx in range(3):
-                    if draw_x < max_x - 6:
-                        safe_addstr(stdscr, start_y + row_idx, draw_x, glyph[row_idx], color)
-
-                if char_pos == letter_offset_in_word:
-                    cursor_screen_y = start_y + 1
-                    cursor_screen_x = draw_x
-
-                draw_x += 4  # glyph width + spacing
-
-            if letter_offset_in_word >= len(active_word):
-                cursor_screen_y = start_y + 1
-                cursor_screen_x = draw_x
-
-            # Show next word faded
-            if next_word:
-                next_label = f"NEXT WORD:  {next_word}"
-                safe_addstr(stdscr, 10, 4, next_label, c_faded | curses.A_BOLD)
-
-            # Full sentence context preview below
-            preview_y = 12
-            safe_addstr(stdscr, preview_y, 4, "Full Sentence Context:", c_cyan)
-            preview_width = max(30, max_x - 8)
-
-            char_positions, total_rows = build_char_positions(engine.target_text, preview_width)
-            if curr_idx in char_positions:
-                active_row = char_positions[curr_idx][0]
-            else:
-                active_row = 0
-
-            scroll_offset = max(0, active_row - 1)
-            for i, target_ch in enumerate(engine.target_text):
-                if i not in char_positions:
-                    continue
-                r, c = char_positions[i]
-                line_on_screen = preview_y + 1 + (r - scroll_offset)
-                if line_on_screen >= max_y - 3:
-                    break
-                if line_on_screen < preview_y + 1:
-                    continue
-
-                if i < curr_idx:
-                    col_attr = c_green if engine.typed_chars[i] == target_ch else c_red
-                    safe_addstr(stdscr, line_on_screen, 4 + c, target_ch, col_attr)
-                else:
-                    safe_addstr(stdscr, line_on_screen, 4 + c, target_ch, c_faded)
-
+        if curr_idx in char_positions:
+            active_row, active_col = char_positions[curr_idx]
+        elif curr_idx > 0 and (curr_idx - 1) in char_positions:
+            prev_row, prev_col = char_positions[curr_idx - 1]
+            active_row, active_col = prev_row, prev_col + 1
         else:
-            # ==========================================
-            # SPACIOUS MODE: Double line spacing & centered box
-            # ==========================================
-            wrap_width = max(30, min(max_x - 8, 80))
-            box_x = max(4, (max_x - wrap_width) // 2)
+            active_row, active_col = (0, 0)
 
-            char_positions, total_rows = build_char_positions(engine.target_text, wrap_width)
+        # Double line spacing: line_step = 2
+        start_row = 5
+        scroll_offset = max(0, active_row - 1)
+        visible_rows = max(1, (max_y - start_row - 4) // 2)
 
-            if curr_idx in char_positions:
-                active_row, active_col = char_positions[curr_idx]
-            elif curr_idx > 0 and (curr_idx - 1) in char_positions:
-                prev_row, prev_col = char_positions[curr_idx - 1]
-                active_row, active_col = prev_row, prev_col + 1
-            else:
-                active_row, active_col = (0, 0)
+        cursor_screen_y = start_row + (active_row - scroll_offset) * 2
+        cursor_screen_x = box_x + active_col
 
-            # Double line spacing: line_step = 2
-            start_row = 5
-            scroll_offset = max(0, active_row - 1)
-            visible_rows = max(1, (max_y - start_row - 4) // 2)
+        for i, target_ch in enumerate(engine.target_text):
+            if i not in char_positions:
+                continue
 
-            cursor_screen_y = start_row + (active_row - scroll_offset) * 2
-            cursor_screen_x = box_x + active_col
+            r, c = char_positions[i]
+            line_offset = r - scroll_offset
+            if line_offset < 0 or line_offset >= visible_rows:
+                continue
 
-            for i, target_ch in enumerate(engine.target_text):
-                if i not in char_positions:
-                    continue
+            screen_y = start_row + (line_offset * 2)  # Double-spaced rows!
+            screen_x = box_x + c
 
-                r, c = char_positions[i]
-                line_offset = r - scroll_offset
-                if line_offset < 0 or line_offset >= visible_rows:
-                    continue
-
-                screen_y = start_row + (line_offset * 2)  # Double-spaced rows!
-                screen_x = box_x + c
-
-                if i < curr_idx:
-                    typed_ch = engine.typed_chars[i]
-                    if typed_ch == target_ch:
-                        # Correct letter -> Vibrant Green
-                        safe_addstr(stdscr, screen_y, screen_x, target_ch, c_green)
-                    else:
-                        # Mistyped letter -> Vivid Red
-                        if typed_ch == ' ':
-                            safe_addstr(stdscr, screen_y, screen_x, "_", c_red | curses.A_REVERSE)
-                        else:
-                            safe_addstr(stdscr, screen_y, screen_x, typed_ch, c_red | curses.A_UNDERLINE)
+            if i < curr_idx:
+                typed_ch = engine.typed_chars[i]
+                if typed_ch == target_ch:
+                    # Correct letter -> Bold Neon Green
+                    safe_addstr(stdscr, screen_y, screen_x, target_ch, c_green)
                 else:
-                    # Upcoming text -> High-contrast light gray (never invisible)
-                    safe_addstr(stdscr, screen_y, screen_x, target_ch, c_faded)
+                    # Mistyped letter -> Bold Vivid Red
+                    if typed_ch == ' ':
+                        safe_addstr(stdscr, screen_y, screen_x, "_", c_red | curses.A_REVERSE)
+                    else:
+                        safe_addstr(stdscr, screen_y, screen_x, typed_ch, c_red | curses.A_UNDERLINE)
+            elif word_start <= i < word_end:
+                # Active whole word: Bright bold white so the whole word stands out clearly
+                safe_addstr(stdscr, screen_y, screen_x, target_ch, c_white)
+            else:
+                # Upcoming future words: Crisp bold light slate gray
+                safe_addstr(stdscr, screen_y, screen_x, target_ch, c_faded)
 
         # Completion Card (Sprint Mode)
         if engine.completed:
@@ -613,7 +455,7 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None, start_big_font=Fal
         # ==========================================
         footer_y = max_y - 2
         safe_addstr(stdscr, footer_y - 1, 2, "─" * (max_x - 4), c_faded)
-        controls = "[1/2] Mode   [B] Big Font   [Space] Key   [Backspace] Fix   [Ctrl+R] Reset   [ESC] Exit   [Ctrl++: Zoom Terminal]"
+        controls = "[1/2] Mode   [Space] Key   [Backspace] Fix   [Ctrl+R] Reset   [ESC] Exit"
         if engine.completed:
             controls = "[ENTER] Next Sentence   " + controls
         safe_addstr(stdscr, footer_y, 4, controls, c_cyan)
@@ -648,8 +490,6 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None, start_big_font=Fal
                                 engine.switch_mode("SPRINT")
                             elif action == "ENDLESS":
                                 engine.switch_mode("ENDLESS")
-                            elif action == "TOGGLE_BIG":
-                                big_font = not big_font
                             break
             except curses.error:
                 pass
@@ -658,8 +498,6 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None, start_big_font=Fal
         # Keyboard shortcuts
         if ch in (27, 3):  # ESC or Ctrl+C
             break
-        elif ch in (ord('b'), ord('B'), curses.KEY_F3) and (len(engine.typed_chars) == 0 or (curr_idx < len(engine.target_text) and engine.target_text[curr_idx] not in ('b', 'B'))):
-            big_font = not big_font
         elif ch == ord('1') and (len(engine.typed_chars) == 0 or (curr_idx < len(engine.target_text) and engine.target_text[curr_idx] != '1')):
             engine.switch_mode("SPRINT")
         elif ch == ord('2') and (len(engine.typed_chars) == 0 or (curr_idx < len(engine.target_text) and engine.target_text[curr_idx] != '2')):
@@ -691,14 +529,10 @@ def main():
                 * Special symbols appear once every 200 words
                 * Comma and fullstop appear once every ~35 words
                 * Clean arbitrary words in between
-
-Display Options:
-  --big, -b   - Launch with Big Font Mode (3-row giant ASCII letters)!
 """
     )
     parser.add_argument("-1", "--sprint", action="store_true", help="Launch directly in Sprint Mode (1-2 min WPM test)")
     parser.add_argument("-2", "--endless", action="store_true", help="Launch directly in Endless Mode (controlled practice)")
-    parser.add_argument("-b", "--big", action="store_true", help="Launch with Big Font Mode (giant letters)")
     parser.add_argument("custom", nargs="*", help="Optional custom text or sentence to practice")
 
     args = parser.parse_args()
@@ -712,7 +546,7 @@ Display Options:
     custom_text = " ".join(args.custom) if args.custom else None
 
     try:
-        result = curses.wrapper(run_game, mode, custom_text, args.big)
+        result = curses.wrapper(run_game, mode, custom_text)
         final_stats, final_mode = result if result else (None, mode)
     except KeyboardInterrupt:
         final_stats, final_mode = None, mode
@@ -734,3 +568,4 @@ Display Options:
 
 if __name__ == "__main__":
     main()
+

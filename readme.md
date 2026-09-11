@@ -1,17 +1,17 @@
 # ⌨️ Terminal Typing Game (`ttyping`)
 
-A lightweight, responsive, and distraction-free terminal typing speed and practice game built in Python using standard `curses`. Featuring giant 3-row Big Font mode, double-spaced layout, Monkeytype-style faded words, character-by-character precision, and clickable mouse support.
+A lightweight, responsive, and distraction-free terminal typing speed and practice game built in Python using standard `curses`. Featuring prominent whole-word focus, bold typography, double-spaced layout, Monkeytype-style faded words, character-by-character precision, and clickable mouse support.
 
 ---
 
-## 🔍 Visibility & Big Font Features
+## 🔍 Visibility & Typography
 
-* **🔍 Giant 3-Row Big Font Mode:** Renders the active word in massive 3-row tall block letters (`[ B: Big Font ]`) so you never have to squint or strain your eyes.
-* **📏 Double Line Spacing:** Generous empty lines between text rows for effortless reading.
+* **🔍 Active Whole-Word Focus:** The entire active word currently being typed is highlighted in bright bold white so it stands out immediately and is effortless to read.
+* **📏 Double Line Spacing:** Generous empty lines between text rows for effortless reading and natural eye tracking.
 * **✨ High-Contrast Color Palette:**
-  * **Vibrant Neon Green:** Correct letters.
+  * **Vibrant Bold Neon Green:** Correct letters.
   * **Vivid Bold Red:** Mistyped letters.
-  * **Crisp Light Slate Gray:** Upcoming letters (always clearly readable, never muddy or invisible).
+  * **Crisp Bold Light Slate Gray:** Upcoming letters (always clearly readable, never muddy or invisible).
 * **🖥️ Centered Canvas:** Text area automatically centers horizontally and vertically in your terminal window.
 
 ---
@@ -33,16 +33,14 @@ A lightweight, responsive, and distraction-free terminal typing speed and practi
 
 ---
 
-## 🕹️ Mode & Size Selection
+## 🕹️ Mode Selection
 
-1. **🖱️ Mouse:** Click directly on `[ 1: ⚡ Sprint ]`, `[ 2: ♾️ Endless ]`, or `[ B: 🔍 Big Font ]` on the top bar.
+1. **🖱️ Mouse:** Click directly on `[ 1: ⚡ Sprint ]` or `[ 2: ♾️ Endless ]` on the top bar.
 2. **⌨️ Keyboard:**
    * **`1` / `2`:** Switch between Sprint and Endless modes.
-   * **`B`:** Toggle Big Font on/off.
    * **`TAB`:** Cycle modes.
 3. **💻 CLI Flags:**
    ```bash
-   ttyping --big        # Launch directly in Big Font Mode (or: ttyping -b)
    ttyping --sprint     # Launch in Sprint Mode (or: ttyping -1)
    ttyping --endless    # Launch in Endless Mode (or: ttyping -2)
    ```
