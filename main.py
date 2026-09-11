@@ -2,11 +2,12 @@
 """
 Terminal Typing Game (ttyping)
 Features:
+- Character-by-character precision: Space is treated just like any other key (never skips words).
+- Live color coding: Correct letters are GREEN, mistyped letters are RED, upcoming text is FADED.
 - Mode 1 (Sprint): Simple sentences to test your WPM in 1-2 minutes.
-- Mode 2 (Endless): Continuous endless practice with complex vocabulary, code syntax, and symbol keys.
+- Mode 2 (Endless): Continuous endless typing stream with complex vocabulary and code symbols.
 - Interactive Top Bar: Clickable via mouse and selectable with keys [1], [2], or [TAB].
 - CLI Flags: --sprint (-1), --endless (-2), or custom practice text.
-- Monkeytype-style faded ghost words.
 """
 
 import sys
@@ -15,7 +16,7 @@ import random
 import argparse
 import curses
 
-# Mode 1: Natural, everyday English sentences for fast 1-2 minute WPM benchmarking
+# Mode 1: Clean, natural English sentences for 1-2 minute WPM tests
 SPRINT_SENTENCES = [
     "Success is not final, failure is not fatal: it is the courage to continue that counts. Keep your focus forward and learn from every step.",
     "The early morning sun broke through the clouds, warming the quiet city streets as people slowly began their daily routines with coffee.",
@@ -29,23 +30,19 @@ SPRINT_SENTENCES = [
     "Clear writing usually reflects clear thinking. When you take the time to organize your ideas, others will understand your vision."
 ]
 
-# Mode 2: Advanced vocabulary, technical jargon, mixed casing, and symbols to train all fingers and keys
+# Mode 2: Advanced vocabulary, technical terms, symbols, and varied keys for mastery
 COMPLEX_WORDS_POOL = [
-    # Complex multisyllabic vocabulary
     "extraordinary", "juxtaposition", "serendipity", "unprecedented", "crystallization",
     "idiosyncratic", "equilibrium", "heterogeneous", "magnificent", "comprehensive",
     "susceptibility", "counterintuitive", "acknowledgement", "quintessential", "resilience",
     "infrastructure", "philosophical", "metamorphosis", "synchronization", "perspicacity",
     "conscientious", "disproportionate", "incompatibility", "characteristically", "anachronism",
     "ubiquitous", "circumlocution", "idiosyncrasy", "reconnaissance", "photosynthesis",
-    # Computer science & software engineering
     "asynchronous", "polymorphism", "concurrency", "cryptography", "microservices",
     "virtualization", "encapsulation", "reconciliation", "authentication", "authorization",
     "multithreading", "serialization", "containerization", "backpropagation", "hyperparameter",
     "orchestration", "deterministic", "subroutines", "idempotent", "decoupling",
     "observability", "maintainability", "declarative", "imperative", "distributed",
-    "algorithm", "bandwidth", "cache_miss", "deadlock", "event_loop",
-    # Key-reaching constructs (symbols, underscores, casing, dots)
     "calculate_sum()", "UserAuth.verify()", "data_stream.pipe()", "item_list[index]",
     "config_options", "max_capacity_limit", "response.status_code", "process_id#99",
     "lambda_handler()", "matrix_multiply()", "format_output()", "query_param:value",
@@ -67,23 +64,18 @@ class TypingEngine:
 
     def reset(self):
         if self.custom_text:
-            self.words = self.custom_text.split()
+            self.target_text = self.custom_text.strip()
         elif self.mode == "SPRINT":
-            sentence = random.choice(SPRINT_SENTENCES)
-            self.words = sentence.split()
+            self.target_text = random.choice(SPRINT_SENTENCES)
         elif self.mode == "ENDLESS":
-            self.words = random.sample(COMPLEX_WORDS_POOL, min(35, len(COMPLEX_WORDS_POOL)))
+            self.target_text = " ".join(random.sample(COMPLEX_WORDS_POOL, min(35, len(COMPLEX_WORDS_POOL))))
         else:
-            self.words = []
+            self.target_text = ""
 
-        self.current_word_idx = 0
-        self.current_input = ""
+        self.typed_chars = []
         self.start_time = None
         self.end_time = None
         self.total_keystrokes = 0
-        self.correct_keystrokes = 0
-        self.word_results = {}  # idx -> bool (is_correct)
-        self.streak = 0
         self.completed = False
 
     def switch_mode(self, new_mode):
@@ -100,58 +92,25 @@ class TypingEngine:
             self.start_time = time.time()
 
         self.total_keystrokes += 1
+        self.typed_chars.append(char)
 
-        if self.current_word_idx < len(self.words):
-            target_word = self.words[self.current_word_idx]
-            target_char_idx = len(self.current_input)
-            if target_char_idx < len(target_word) and char == target_word[target_char_idx]:
-                self.correct_keystrokes += 1
-            self.current_input += char
-
-    def handle_space(self):
-        if self.completed or not self.current_input:
-            return
-
-        if self.start_time is None:
-            self.start_time = time.time()
-
-        self.total_keystrokes += 1
-        target_word = self.words[self.current_word_idx]
-        is_match = (self.current_input == target_word)
-
-        if is_match:
-            self.correct_keystrokes += 1
-            self.streak += 1
-        else:
-            self.streak = 0
-
-        self.word_results[self.current_word_idx] = is_match
-        self.current_word_idx += 1
-        self.current_input = ""
-
-        # Endless Mode: Dynamically stream new complex words without end
+        # In Endless Mode, stream more words dynamically as the player nears the end
         if self.mode == "ENDLESS":
-            if self.current_word_idx > len(self.words) - 15:
-                next_batch = random.sample(COMPLEX_WORDS_POOL, 20)
-                self.words.extend(next_batch)
-        else:
-            # Sprint Mode: Finish when all words in the sentence are typed
-            if self.current_word_idx >= len(self.words):
+            if len(self.typed_chars) > len(self.target_text) - 120:
+                more_words = " " + " ".join(random.sample(COMPLEX_WORDS_POOL, 25))
+                self.target_text += more_words
+
+        # In Sprint Mode, finish when all characters in the sentence are typed
+        elif self.mode == "SPRINT":
+            if len(self.typed_chars) >= len(self.target_text):
                 self.completed = True
                 self.end_time = time.time()
 
     def backspace(self):
         if self.completed:
             return
-        if self.current_input:
-            self.current_input = self.current_input[:-1]
-        elif self.current_word_idx > 0:
-            # Backspace into previous word if it was marked incorrect
-            prev_idx = self.current_word_idx - 1
-            if not self.word_results.get(prev_idx, True):
-                self.current_word_idx = prev_idx
-                self.current_input = self.words[prev_idx]
-                del self.word_results[prev_idx]
+        if self.typed_chars:
+            self.typed_chars.pop()
 
     def get_elapsed_time(self):
         if self.start_time is None:
@@ -164,25 +123,50 @@ class TypingEngine:
         elapsed = self.get_elapsed_time()
         minutes = elapsed / 60.0 if elapsed > 0 else 0.0
 
+        correct_count = 0
+        mistakes_count = 0
+
+        for i, typed_ch in enumerate(self.typed_chars):
+            if i < len(self.target_text):
+                if typed_ch == self.target_text[i]:
+                    correct_count += 1
+                else:
+                    mistakes_count += 1
+            else:
+                mistakes_count += 1
+
         if minutes > 0:
-            wpm = (self.correct_keystrokes / 5.0) / minutes
-            cpm = self.correct_keystrokes / minutes
+            wpm = (correct_count / 5.0) / minutes
+            cpm = correct_count / minutes
         else:
             wpm = 0.0
             cpm = 0.0
 
-        accuracy = (self.correct_keystrokes / self.total_keystrokes * 100.0) if self.total_keystrokes > 0 else 100.0
+        typed_len = len(self.typed_chars)
+        accuracy = (correct_count / typed_len * 100.0) if typed_len > 0 else 100.0
+
+        # Calculate completed words
+        completed_words = 0
+        current_text_typed = self.target_text[:typed_len]
+        words_in_typed_part = current_text_typed.split(' ')
+        if len(words_in_typed_part) > 1:
+            completed_words = len(words_in_typed_part) - 1
+
+        total_words = len(self.target_text.split(' ')) if self.mode != "ENDLESS" else "∞"
 
         return {
             "elapsed": elapsed,
             "wpm": round(wpm, 1),
             "cpm": round(cpm, 1),
             "accuracy": round(accuracy, 1),
-            "words_completed": self.current_word_idx,
-            "total_words": len(self.words) if self.mode != "ENDLESS" else "∞",
-            "streak": self.streak,
+            "correct_chars": correct_count,
+            "mistakes": mistakes_count,
+            "words_completed": completed_words,
+            "total_words": total_words,
             "completed": self.completed,
-            "keystrokes": self.total_keystrokes
+            "keystrokes": self.total_keystrokes,
+            "typed_len": typed_len,
+            "target_len": len(self.target_text)
         }
 
 def safe_addstr(stdscr, y, x, text, attr=0):
@@ -196,6 +180,41 @@ def safe_addstr(stdscr, y, x, text, attr=0):
         stdscr.addstr(y, x, text[:max_len], attr)
     except curses.error:
         pass
+
+def build_char_positions(text, wrap_width):
+    """
+    Wraps text by words and maps each character index to (row, col) coordinates.
+    """
+    char_positions = {}
+    words = text.split(' ')
+    cur_row = 0
+    cur_col = 0
+    global_idx = 0
+
+    for w_idx, word in enumerate(words):
+        # Wrap to next line if word does not fit on current line
+        if cur_col + len(word) > wrap_width and cur_col > 0:
+            cur_row += 1
+            cur_col = 0
+
+        for ch in word:
+            if cur_col >= wrap_width:
+                cur_row += 1
+                cur_col = 0
+            char_positions[global_idx] = (cur_row, cur_col)
+            cur_col += 1
+            global_idx += 1
+
+        # Space character between words
+        if w_idx < len(words) - 1:
+            if cur_col >= wrap_width:
+                cur_row += 1
+                cur_col = 0
+            char_positions[global_idx] = (cur_row, cur_col)
+            cur_col += 1
+            global_idx += 1
+
+    return char_positions, cur_row + 1
 
 def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
     try:
@@ -300,109 +319,82 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
         wpm_str = f"⚡ WPM: {stats['wpm']}"
         cpm_str = f"CPM: {stats['cpm']}"
         acc_str = f"Acc: {stats['accuracy']}%"
-        
-        if engine.mode == "ENDLESS":
-            prog_str = f"Words: {stats['words_completed']} | Streak: {stats['streak']}"
-        else:
-            prog_str = f"Words: {stats['words_completed']}/{stats['total_words']}"
+        err_str = f"Errors: {stats['mistakes']}"
+        prog_str = f"Words: {stats['words_completed']}/{stats['total_words']}"
 
-        stat_bar = f"{time_str}    {wpm_str}    {cpm_str}    {acc_str}    {prog_str}"
+        stat_bar = f"{time_str}   {wpm_str}   {cpm_str}   {acc_str}   {err_str}   {prog_str}"
         safe_addstr(stdscr, 2, 4, stat_bar, curses.A_BOLD)
         safe_addstr(stdscr, 3, 2, "─" * (max_x - 4), c_faded)
 
         # ==========================================
-        # 3. WORD STREAM & FADED WORDS AREA
+        # 3. TEXT RENDERING (GREEN = Correct, RED = Error, FADED = Upcoming)
         # ==========================================
         start_row = 5
         wrap_width = max(30, max_x - 8)
         padding_left = 4
 
-        # Wrap words into display rows
-        lines = []
-        current_line = []
-        current_len = 0
-        word_positions = {}
+        char_positions, total_rows = build_char_positions(engine.target_text, wrap_width)
 
-        for idx, w in enumerate(engine.words):
-            w_len = len(w) + 1
-            if current_len + len(w) > wrap_width and current_line:
-                lines.append(current_line)
-                current_line = []
-                current_len = 0
+        # Determine cursor coordinates
+        curr_idx = len(engine.typed_chars)
+        if curr_idx in char_positions:
+            active_row, active_col = char_positions[curr_idx]
+        elif curr_idx > 0 and (curr_idx - 1) in char_positions:
+            prev_row, prev_col = char_positions[curr_idx - 1]
+            active_row, active_col = prev_row, prev_col + 1
+        else:
+            active_row, active_col = (0, 0)
 
-            row = len(lines)
-            col = current_len
-            word_positions[idx] = (row, col)
-            current_line.append((idx, w))
-            current_len += w_len
-
-        if current_line:
-            lines.append(current_line)
-
-        # Smooth vertical scroll to keep current word centered
-        active_row = word_positions.get(engine.current_word_idx, (0, 0))[0]
+        # Smooth vertical scroll to keep current typing line centered
         scroll_offset = max(0, active_row - 1)
-        visible_lines = min(max_y - 9, len(lines) - scroll_offset)
+        visible_lines = min(max_y - 9, total_rows - scroll_offset)
 
-        cursor_y = start_row
-        cursor_x = padding_left
+        # Draw each character of the target text
+        for i, target_ch in enumerate(engine.target_text):
+            if i not in char_positions:
+                continue
 
-        for line_idx in range(scroll_offset, scroll_offset + visible_lines):
-            screen_y = start_row + (line_idx - scroll_offset)
-            if line_idx >= len(lines):
-                break
+            r, c = char_positions[i]
+            screen_y = start_row + (r - scroll_offset)
 
-            for w_idx, w_text in lines[line_idx]:
-                w_row, w_col = word_positions[w_idx]
-                screen_x = padding_left + w_col
+            # Skip lines outside visible screen area
+            if screen_y < start_row or screen_y >= start_row + visible_lines:
+                continue
 
-                if w_idx < engine.current_word_idx:
-                    # Completed words
-                    is_correct = engine.word_results.get(w_idx, True)
-                    color = c_green if is_correct else c_red
-                    safe_addstr(stdscr, screen_y, screen_x, w_text, color)
-                    safe_addstr(stdscr, screen_y, screen_x + len(w_text), " ", c_faded)
+            screen_x = padding_left + c
 
-                elif w_idx == engine.current_word_idx:
-                    # Current active word being typed
-                    curr_input = engine.current_input
-                    typed_len = len(curr_input)
-                    target_len = len(w_text)
-
-                    # Typed letters
-                    for char_idx in range(typed_len):
-                        draw_x = screen_x + char_idx
-                        if char_idx < target_len:
-                            if curr_input[char_idx] == w_text[char_idx]:
-                                safe_addstr(stdscr, screen_y, draw_x, curr_input[char_idx], c_green | curses.A_BOLD)
-                            else:
-                                safe_addstr(stdscr, screen_y, draw_x, curr_input[char_idx], c_red | curses.A_UNDERLINE | curses.A_BOLD)
-                        else:
-                            # Extra letters beyond target length
-                            safe_addstr(stdscr, screen_y, draw_x, curr_input[char_idx], c_red | curses.A_BOLD)
-
-                    # Untyped characters of current word (FADED)
-                    for char_idx in range(typed_len, target_len):
-                        draw_x = screen_x + char_idx
-                        safe_addstr(stdscr, screen_y, draw_x, w_text[char_idx], c_faded)
-
-                    # Trailing space (FADED)
-                    trailing_space_x = screen_x + max(typed_len, target_len)
-                    safe_addstr(stdscr, screen_y, trailing_space_x, " ", c_faded)
-
-                    # Cursor position right after typed input
-                    cursor_y = screen_y
-                    cursor_x = screen_x + typed_len
-
+            if i < curr_idx:
+                typed_ch = engine.typed_chars[i]
+                if typed_ch == target_ch:
+                    # Correct letter -> GREEN
+                    safe_addstr(stdscr, screen_y, screen_x, target_ch, c_green | curses.A_BOLD)
                 else:
-                    # Upcoming words (ANOTHER WORD FADED)
-                    safe_addstr(stdscr, screen_y, screen_x, w_text, c_faded)
-                    safe_addstr(stdscr, screen_y, screen_x + len(w_text), " ", c_faded)
+                    # Error letter -> RED
+                    if typed_ch == ' ':
+                        # User pressed space when a letter was expected
+                        safe_addstr(stdscr, screen_y, screen_x, "_", c_red | curses.A_BOLD | curses.A_UNDERLINE)
+                    else:
+                        safe_addstr(stdscr, screen_y, screen_x, typed_ch, c_red | curses.A_BOLD | curses.A_UNDERLINE)
+            else:
+                # Upcoming text ("another word but faded") -> FADED
+                safe_addstr(stdscr, screen_y, screen_x, target_ch, c_faded)
+
+        # Draw extra typed characters beyond target text in red
+        if curr_idx > len(engine.target_text):
+            for extra_i in range(len(engine.target_text), curr_idx):
+                extra_ch = engine.typed_chars[extra_i]
+                # Draw at the end
+                if screen_y < start_row + visible_lines:
+                    safe_addstr(stdscr, screen_y, screen_x + (extra_i - len(engine.target_text)) + 1, extra_ch, c_red | curses.A_BOLD)
+
+        # Position of the blinking cursor
+        cursor_screen_y = start_row + (active_row - scroll_offset)
+        cursor_screen_x = padding_left + active_col
 
         # Completion Card (Sprint Mode)
         if engine.completed:
             card_y = min(max_y - 5, start_row + visible_lines + 1)
-            congrats = f"🏆 Sprint Finished! Speed: {stats['wpm']} WPM | Accuracy: {stats['accuracy']}%"
+            congrats = f"🏆 Sprint Finished! Speed: {stats['wpm']} WPM | Accuracy: {stats['accuracy']}% | Errors: {stats['mistakes']}"
             prompt = "Press [ENTER] for next sentence, [1] / [2] to change mode, or [ESC] to quit."
             safe_addstr(stdscr, card_y, 4, congrats, c_yellow | curses.A_BOLD)
             safe_addstr(stdscr, card_y + 1, 4, prompt, curses.A_BOLD)
@@ -412,21 +404,21 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
         # ==========================================
         footer_y = max_y - 2
         safe_addstr(stdscr, footer_y - 1, 2, "─" * (max_x - 4), c_faded)
-        controls = "[1/2 or Click] Switch Mode   [Space] Next Word   [Backspace] Delete   [Ctrl+R] Reset   [ESC] Exit"
+        controls = "[1/2 or Click] Switch Mode   [Backspace] Delete   [Ctrl+R] Reset   [ESC] Exit"
         if engine.completed:
             controls = "[ENTER] Next Sentence   " + controls
         safe_addstr(stdscr, footer_y, 4, controls, c_cyan)
 
-        # Place physical blinking cursor
+        # Move terminal cursor to active position
         try:
-            if 0 <= cursor_y < max_y and 0 <= cursor_x < max_x:
-                stdscr.move(cursor_y, cursor_x)
+            if 0 <= cursor_screen_y < max_y and 0 <= cursor_screen_x < max_x:
+                stdscr.move(cursor_screen_y, cursor_screen_x)
         except curses.error:
             pass
 
         stdscr.refresh()
 
-        # Event input handling
+        # Input handling
         try:
             ch = stdscr.getch()
         except curses.error:
@@ -440,7 +432,6 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
         if ch == curses.KEY_MOUSE:
             try:
                 _, mx, my, _, bstate = curses.getmouse()
-                # Check top bar row (row 0)
                 if my == 0 and (bstate & (curses.BUTTON1_CLICKED | curses.BUTTON1_PRESSED | curses.BUTTON1_RELEASED)):
                     for x_start, x_end, target_mode in top_buttons:
                         if x_start <= mx <= x_end:
@@ -453,31 +444,24 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
         # Keyboard shortcuts
         if ch in (27, 3):  # ESC or Ctrl+C
             break
-        elif ch == ord('1'):
-            # Switch to Sprint mode if not already on it
-            if engine.mode != "SPRINT":
-                engine.switch_mode("SPRINT")
-            else:
-                engine.add_char('1')
-        elif ch == ord('2'):
-            # Switch to Endless mode if not already on it
-            if engine.mode != "ENDLESS":
-                engine.switch_mode("ENDLESS")
-            else:
-                engine.add_char('2')
+        elif ch == ord('1') and (len(engine.typed_chars) == 0 or (curr_idx < len(engine.target_text) and engine.target_text[curr_idx] != '1')):
+            # Switch to Sprint mode if not typing '1'
+            engine.switch_mode("SPRINT")
+        elif ch == ord('2') and (len(engine.typed_chars) == 0 or (curr_idx < len(engine.target_text) and engine.target_text[curr_idx] != '2')):
+            # Switch to Endless mode if not typing '2'
+            engine.switch_mode("ENDLESS")
         elif ch == 9:  # TAB -> toggle mode
             next_mode = "ENDLESS" if engine.mode == "SPRINT" else "SPRINT"
             engine.switch_mode(next_mode)
-        elif ch in (18, 263, curses.KEY_F5):  # Ctrl+R or F5
+        elif ch in (18, 263, curses.KEY_F5):  # Ctrl+R or F5 -> Reset
             engine.reset()
         elif ch in (curses.KEY_BACKSPACE, 127, 8, ord('\b')):
             engine.backspace()
-        elif ch == 32:  # Spacebar
-            engine.handle_space()
         elif ch in (10, 13, curses.KEY_ENTER):
             if engine.completed:
                 engine.reset()
-        elif 32 < ch <= 126:
+        elif 32 <= ch <= 126:  # Printable ASCII characters (INCLUDING SPACE 32!)
+            # Space is treated just like any other key: does NOT skip words!
             engine.add_char(chr(ch))
 
     return last_stats, engine.mode
@@ -515,7 +499,7 @@ Interactive Controls:
     except KeyboardInterrupt:
         final_stats, final_mode = None, mode
 
-    # Post-session summary
+    # Summary
     print("\n" + "=" * 50)
     print("             TERMINAL TYPING SUMMARY              ")
     print("=" * 50)
@@ -525,9 +509,8 @@ Interactive Controls:
         print(f"  📝 Words Completed  : {final_stats['words_completed']}")
         print(f"  ⚡ Typing Speed     : {final_stats['wpm']} WPM ({final_stats['cpm']} CPM)")
         print(f"  🎯 Accuracy         : {final_stats['accuracy']}%")
+        print(f"  ❌ Errors Made      : {final_stats['mistakes']}")
         print(f"  ⌨️  Total Keystrokes : {final_stats['keystrokes']}")
-        if final_mode == "ENDLESS":
-            print(f"  🔥 Best Streak      : {final_stats['streak']} words")
     print("=" * 50)
     print("Thanks for playing! Run 'ttyping' anytime to play again.\n")
 
