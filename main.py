@@ -13,8 +13,10 @@ Features:
     * Numbers: once every 100 words
     * Special characters / symbols: once every 200 words
     * All other words: arbitrary clean vocabulary
-- Interactive Top Bar: Clickable via mouse and selectable with keys [1], [2], or [TAB].
-- CLI Flags: --sprint (-1), --endless (-2), or custom practice text.
+- Mode 3 (Tutor): Interactive touch typing tutor with full QWERTY keyboard layout, faded hand &
+  finger positions, real-time key-to-finger guidance, and interactive key exploration.
+- Interactive Top Bar: Clickable via mouse and selectable with keys [1], [2], [3], or [TAB].
+- CLI Flags: --sprint (-1), --endless (-2), --tutor (-3), or custom practice text.
 """
 
 import sys
@@ -106,11 +108,304 @@ def format_time(seconds):
     secs = int(seconds) % 60
     return f"{mins:02d}:{secs:02d}"
 
+# ==============================================================================
+# MODE 3 (TUTOR): FINGER GUIDE & TOUCH TYPING DATA STRUCTURES
+# ==============================================================================
+
+TUTOR_DRILLS = [
+    {
+        "name": "Pangram (All 26 Letters)",
+        "desc": "Covers every single letter on the keyboard across both hands",
+        "text": "the quick brown fox jumps over the lazy dog."
+    },
+    {
+        "name": "Home Row Mastery",
+        "desc": "Practice resting home keys (ASDF and JKL;)",
+        "text": "asdf jkl; sad dad fad lad ask fads flasks salads"
+    },
+    {
+        "name": "Top Row Reach",
+        "desc": "Reach upward from home row (QWERTY UIOP)",
+        "text": "qwer tyui op quiet wipe tower wire pretty power"
+    },
+    {
+        "name": "Bottom Row Reach",
+        "desc": "Reach downward from home row (ZXCV BNM)",
+        "text": "zxcv bnm, . zinc menu comb vexing cab move"
+    },
+    {
+        "name": "Numbers & Symbols",
+        "desc": "Practice number keys and basic punctuation",
+        "text": "12345 67890 level1 step2 100% (yes/no) item#4"
+    },
+    {
+        "name": "Free Key Explorer",
+        "desc": "Press ANY key on your keyboard to test which finger types it!",
+        "text": ""
+    }
+]
+
+FINGER_NAMES = {
+    "LP": "Left Pinky",
+    "LR": "Left Ring",
+    "LM": "Left Middle",
+    "LI": "Left Index",
+    "LT": "Left Thumb",
+    "RT": "Right Thumb",
+    "THUMB": "Thumb (Left or Right)",
+    "RI": "Right Index",
+    "RM": "Right Middle",
+    "RR": "Right Ring",
+    "RP": "Right Pinky",
+}
+
+BASE_KEY_MAP = {
+    "~": "`", "!": "1", "@": "2", "#": "3", "$": "4",
+    "%": "5", "^": "6", "&": "7", "*": "8", "(": "9", ")": "0",
+    "_": "-", "+": "=", "{": "[", "}": "]", "|": "\\",
+    ":": ";", "\"": "\x27", "<": ",", ">": ".", "?": "/"
+}
+
+def get_base_key(ch):
+    if ch.isupper():
+        return ch.lower()
+    return BASE_KEY_MAP.get(ch, ch)
+
+def needs_shift(ch):
+    return ch.isupper() or ch in BASE_KEY_MAP
+
+def repr_ch(ch):
+    if ch == ' ':
+        return 'SPACE'
+    return ch
+
+KEY_FINGER_MAP = {
+    # Left Pinky
+    "`": ("LP", "Left Pinky", "Reach top-left corner"),
+    "~": ("LP", "Left Pinky (with Right Shift)", "Reach top-left corner"),
+    "1": ("LP", "Left Pinky", "Reach up from [A]"),
+    "!": ("LP", "Left Pinky (with Right Shift)", "Reach up from [A]"),
+    "q": ("LP", "Left Pinky", "Reach up-left from [A]"),
+    "Q": ("LP", "Left Pinky (with Right Shift)", "Reach up-left from [A]"),
+    "a": ("LP", "Left Pinky", "★ Home key (rest position)"),
+    "A": ("LP", "Left Pinky (with Right Shift)", "★ Home key (rest position)"),
+    "z": ("LP", "Left Pinky", "Reach down-left from [A]"),
+    "Z": ("LP", "Left Pinky (with Right Shift)", "Reach down-left from [A]"),
+    "Tab": ("LP", "Left Pinky", "Left edge of keyboard"),
+    "Caps": ("LP", "Left Pinky", "Left edge of keyboard"),
+
+    # Left Ring
+    "2": ("LR", "Left Ring", "Reach up from [S]"),
+    "@": ("LR", "Left Ring (with Right Shift)", "Reach up from [S]"),
+    "w": ("LR", "Left Ring", "Reach up from [S]"),
+    "W": ("LR", "Left Ring (with Right Shift)", "Reach up from [S]"),
+    "s": ("LR", "Left Ring", "★ Home key (rest position)"),
+    "S": ("LR", "Left Ring (with Right Shift)", "★ Home key (rest position)"),
+    "x": ("LR", "Left Ring", "Reach down from [S]"),
+    "X": ("LR", "Left Ring (with Right Shift)", "Reach down from [S]"),
+
+    # Left Middle
+    "3": ("LM", "Left Middle", "Reach up from [D]"),
+    "#": ("LM", "Left Middle (with Right Shift)", "Reach up from [D]"),
+    "e": ("LM", "Left Middle", "Reach up from [D]"),
+    "E": ("LM", "Left Middle (with Right Shift)", "Reach up from [D]"),
+    "d": ("LM", "Left Middle", "★ Home key (rest position)"),
+    "D": ("LM", "Left Middle (with Right Shift)", "★ Home key (rest position)"),
+    "c": ("LM", "Left Middle", "Reach down from [D]"),
+    "C": ("LM", "Left Middle (with Right Shift)", "Reach down from [D]"),
+
+    # Left Index
+    "4": ("LI", "Left Index", "Reach up from [F]"),
+    "$": ("LI", "Left Index (with Right Shift)", "Reach up from [F]"),
+    "5": ("LI", "Left Index", "Reach up-right from [F]"),
+    "%": ("LI", "Left Index (with Right Shift)", "Reach up-right from [F]"),
+    "r": ("LI", "Left Index", "Reach up from [F]"),
+    "R": ("LI", "Left Index (with Right Shift)", "Reach up from [F]"),
+    "t": ("LI", "Left Index", "Reach up-right from [F]"),
+    "T": ("LI", "Left Index (with Right Shift)", "Reach up-right from [F]"),
+    "f": ("LI", "Left Index", "★ Home key with tactile bump [F]"),
+    "F": ("LI", "Left Index (with Right Shift)", "★ Home key with tactile bump [F]"),
+    "g": ("LI", "Left Index", "Reach right from [F]"),
+    "G": ("LI", "Left Index (with Right Shift)", "Reach right from [F]"),
+    "v": ("LI", "Left Index", "Reach down from [F]"),
+    "V": ("LI", "Left Index (with Right Shift)", "Reach down from [F]"),
+    "b": ("LI", "Left Index", "Reach down-right from [F]"),
+    "B": ("LI", "Left Index (with Right Shift)", "Reach down-right from [F]"),
+
+    # Thumbs (Spacebar)
+    " ": ("THUMB", "Thumb (Left or Right)", "Rest on Spacebar"),
+
+    # Right Index
+    "6": ("RI", "Right Index", "Reach up-left from [J]"),
+    "^": ("RI", "Right Index (with Left Shift)", "Reach up-left from [J]"),
+    "7": ("RI", "Right Index", "Reach up from [J]"),
+    "&": ("RI", "Right Index (with Left Shift)", "Reach up from [J]"),
+    "y": ("RI", "Right Index", "Reach up-left from [J]"),
+    "Y": ("RI", "Right Index (with Left Shift)", "Reach up-left from [J]"),
+    "u": ("RI", "Right Index", "Reach up from [J]"),
+    "U": ("RI", "Right Index (with Left Shift)", "Reach up from [J]"),
+    "h": ("RI", "Right Index", "Reach left from [J]"),
+    "H": ("RI", "Right Index (with Left Shift)", "Reach left from [J]"),
+    "j": ("RI", "Right Index", "★ Home key with tactile bump [J]"),
+    "J": ("RI", "Right Index (with Left Shift)", "★ Home key with tactile bump [J]"),
+    "n": ("RI", "Right Index", "Reach down-left from [J]"),
+    "N": ("RI", "Right Index (with Left Shift)", "Reach down-left from [J]"),
+    "m": ("RI", "Right Index", "Reach down from [J]"),
+    "M": ("RI", "Right Index (with Left Shift)", "Reach down from [J]"),
+
+    # Right Middle
+    "8": ("RM", "Right Middle", "Reach up from [K]"),
+    "*": ("RM", "Right Middle (with Left Shift)", "Reach up from [K]"),
+    "i": ("RM", "Right Middle", "Reach up from [K]"),
+    "I": ("RM", "Right Middle (with Left Shift)", "Reach up from [K]"),
+    "k": ("RM", "Right Middle", "★ Home key (rest position)"),
+    "K": ("RM", "Right Middle (with Left Shift)", "★ Home key (rest position)"),
+    ",": ("RM", "Right Middle", "Reach down from [K]"),
+    "<": ("RM", "Right Middle (with Left Shift)", "Reach down from [K]"),
+
+    # Right Ring
+    "9": ("RR", "Right Ring", "Reach up from [L]"),
+    "(": ("RR", "Right Ring (with Left Shift)", "Reach up from [L]"),
+    "o": ("RR", "Right Ring", "Reach up from [L]"),
+    "O": ("RR", "Right Ring (with Left Shift)", "Reach up from [L]"),
+    "l": ("RR", "Right Ring", "★ Home key (rest position)"),
+    "L": ("RR", "Right Ring (with Left Shift)", "★ Home key (rest position)"),
+    ".": ("RR", "Right Ring", "Reach down from [L]"),
+    ">": ("RR", "Right Ring (with Left Shift)", "Reach down from [L]"),
+
+    # Right Pinky
+    "0": ("RP", "Right Pinky", "Reach up from [;]"),
+    ")": ("RP", "Right Pinky (with Left Shift)", "Reach up from [;]"),
+    "-": ("RP", "Right Pinky", "Reach up-right from [;]"),
+    "_": ("RP", "Right Pinky (with Left Shift)", "Reach up-right from [;]"),
+    "=": ("RP", "Right Pinky", "Reach up-right from [;]"),
+    "+": ("RP", "Right Pinky (with Left Shift)", "Reach up-right from [;]"),
+    "p": ("RP", "Right Pinky", "Reach up from [;]"),
+    "P": ("RP", "Right Pinky (with Left Shift)", "Reach up from [;]"),
+    "[": ("RP", "Right Pinky", "Reach up-right from [;]"),
+    "{": ("RP", "Right Pinky (with Left Shift)", "Reach up-right from [;]"),
+    "]": ("RP", "Right Pinky", "Reach up-right from [;]"),
+    "}": ("RP", "Right Pinky (with Left Shift)", "Reach up-right from [;]"),
+    "\\": ("RP", "Right Pinky", "Far right of top row"),
+    "|": ("RP", "Right Pinky (with Left Shift)", "Far right of top row"),
+    ";": ("RP", "Right Pinky", "★ Home key (rest position)"),
+    ":": ("RP", "Right Pinky (with Left Shift)", "★ Home key (rest position)"),
+    "\x27": ("RP", "Right Pinky", "Reach right from [;]"),
+    "\"": ("RP", "Right Pinky (with Left Shift)", "Reach right from [;]"),
+    "/": ("RP", "Right Pinky", "Reach down from [;]"),
+    "?": ("RP", "Right Pinky (with Left Shift)", "Reach down from [;]"),
+    "Enter": ("RP", "Right Pinky", "Far right of home row"),
+    "Bksp": ("RP", "Right Pinky", "Far right of number row"),
+}
+
+def finger_side(ch):
+    info = KEY_FINGER_MAP.get(ch)
+    if not info:
+        return "LEFT"
+    finger_code = info[0]
+    if finger_code.startswith("L"):
+        return "LEFT"
+    elif finger_code.startswith("R"):
+        return "RIGHT"
+    return "THUMB"
+
+KEYBOARD_LAYOUT = [
+    # Row 0 (58 cols)
+    (0, [
+        ("`", "LP", "[`]"), ("1", "LP", "[1]"), ("2", "LR", "[2]"), ("3", "LM", "[3]"),
+        ("4", "LI", "[4]"), ("5", "LI", "[5]"), ("6", "RI", "[6]"), ("7", "RI", "[7]"),
+        ("8", "RM", "[8]"), ("9", "RR", "[9]"), ("0", "RP", "[0]"), ("-", "RP", "[-]"),
+        ("=", "RP", "[=]"), ("Bksp", "RP", "[Bksp]")
+    ]),
+    # Row 1 (58 cols)
+    (1, [
+        ("Tab", "LP", "[Tab]"), ("q", "LP", "[Q]"), ("w", "LR", "[W]"), ("e", "LM", "[E]"),
+        ("r", "LI", "[R]"), ("t", "LI", "[T]"), ("y", "RI", "[Y]"), ("u", "RI", "[U]"),
+        ("i", "RM", "[I]"), ("o", "RR", "[O]"), ("p", "RP", "[P]"), ("[", "RP", "[[]"),
+        ("]", "RP", "[]]"), ("\\", "RP", "[\\]")
+    ]),
+    # Row 2 (59 cols)
+    (1, [
+        ("Caps", "LP", "[Caps]"), ("a", "LP", "[A]"), ("s", "LR", "[S]"), ("d", "LM", "[D]"),
+        ("f", "LI", "[F]"), ("g", "LI", "[G]"), ("h", "RI", "[H]"), ("j", "RI", "[J]"),
+        ("k", "RM", "[K]"), ("l", "RR", "[L]"), (";", "RP", "[;]"), ("\x27", "RP", "[\x27]"),
+        ("Enter", "RP", "[Enter]")
+    ]),
+    # Row 3 (57 cols)
+    (2, [
+        ("Shift_L", "LP", "[Shift]"), ("z", "LP", "[Z]"), ("x", "LR", "[X]"), ("c", "LM", "[C]"),
+        ("v", "LI", "[V]"), ("b", "LI", "[B]"), ("n", "RI", "[N]"), ("m", "RI", "[M]"),
+        (",", "RM", "[,]"), (".", "RR", "[.]"), ("/", "RP", "[/]"), ("Shift_R", "RP", "[Shift]")
+    ]),
+    # Row 4 (56 cols)
+    (5, [
+        (" ", "THUMB", "[                      SPACE                      ]")
+    ])
+]
+
+# 11-line ASCII art hands (60 cols wide)
+_LH_ART = [
+    "      LEFT HAND          ",
+    " Pinky Ring Mid  Idx  Thb",
+    "  [P]  [R]  [M]  [I]  [T] ",
+    "   │    │    │    │    │ ",
+    "   │    │   ╭─╮   │    │ ",
+    "  ╭─╮  ╭─╮  │ │  ╭─╮   │ ",
+    "  │ │  │ │  │ │  │ │  ╭─╮",
+    "  │ │  │ │  │ │  │ │  │ │",
+    "  │ ╰──┴─┴──┴─┴──┴─┴──┤ │",
+    "  │     LEFT HAND     │ ╯",
+    "  ╰───────────────────╯  "
+]
+
+_RH_ART = [
+    "         RIGHT HAND      ",
+    "Thb  Idx  Mid Ring Pinky ",
+    " [T]  [I]  [M]  [R]  [P] ",
+    "  │    │    │    │    │  ",
+    "  │    │   ╭─╮   │    │  ",
+    "  │   ╭─╮  │ │  ╭─╮  ╭─╮ ",
+    " ╭─╮  │ │  │ │  │ │  │ │ ",
+    " │ │  │ │  │ │  │ │  │ │ ",
+    " │ ├──┴─┴──┴─┴──┴─┴──╯ │ ",
+    " ╰ │     RIGHT HAND    │ ",
+    "   ╰───────────────────╯ "
+]
+
+HAND_LINES = [f"{l:<25}          {r:<25}" for l, r in zip(_LH_ART, _RH_ART)]
+
+# 4-line compact hands diagram (60 cols wide)
+COMPACT_HAND_LINES = [
+    "      LEFT HAND (ASDF)                  RIGHT HAND (JKL;)     ",
+    " Pinky Ring Mid  Idx  Thb          Thb  Idx  Mid Ring Pinky ",
+    "  [P]  [R]  [M]  [I]  [T]           [T]  [I]  [M]  [R]  [P] ",
+    "  ───  ───  ───  ───  ───           ───  ───  ───  ───  ─── "
+]
+
+FINGER_RANGES = {
+    "LP": [(0, 6)],
+    "LR": [(6, 11)],
+    "LM": [(11, 16)],
+    "LI": [(16, 21)],
+    "LT": [(21, 26)],
+    "RT": [(34, 39)],
+    "RI": [(39, 44)],
+    "RM": [(44, 49)],
+    "RR": [(49, 54)],
+    "RP": [(54, 60)],
+    "THUMB": [(21, 26), (34, 39)]
+}
+
+# ==============================================================================
+# TYPING ENGINE
+# ==============================================================================
+
 class TypingEngine:
     def __init__(self, mode="SPRINT", custom_text=None):
         self.mode = mode
         self.custom_text = custom_text
         self.endless_word_counter = 0
+        self.tutor_drill_idx = 0
         self.reset()
 
     def _generate_endless_word(self, index):
@@ -144,6 +439,9 @@ class TypingEngine:
             self.target_text = random.choice(SPRINT_SENTENCES)
         elif self.mode == "ENDLESS":
             self.target_text = self.generate_endless_batch(40)
+        elif self.mode == "TUTOR":
+            drill = TUTOR_DRILLS[self.tutor_drill_idx]
+            self.target_text = drill["text"]
         else:
             self.target_text = ""
 
@@ -156,6 +454,12 @@ class TypingEngine:
     def switch_mode(self, new_mode):
         if self.mode != new_mode:
             self.mode = new_mode
+            self.custom_text = None
+            self.reset()
+
+    def next_drill(self):
+        if self.mode == "TUTOR":
+            self.tutor_drill_idx = (self.tutor_drill_idx + 1) % len(TUTOR_DRILLS)
             self.custom_text = None
             self.reset()
 
@@ -174,8 +478,8 @@ class TypingEngine:
                 more_words = " " + self.generate_endless_batch(25)
                 self.target_text += more_words
 
-        elif self.mode == "SPRINT":
-            if len(self.typed_chars) >= len(self.target_text):
+        elif self.mode in ("SPRINT", "TUTOR"):
+            if self.target_text and len(self.typed_chars) >= len(self.target_text):
                 self.completed = True
                 self.end_time = time.time()
 
@@ -224,7 +528,10 @@ class TypingEngine:
         if len(words_in_typed_part) > 1:
             completed_words = len(words_in_typed_part) - 1
 
-        total_words = len(self.target_text.split(' ')) if self.mode != "ENDLESS" else "∞"
+        if self.mode == "ENDLESS" or not self.target_text:
+            total_words = "∞"
+        else:
+            total_words = len(self.target_text.split(' '))
 
         return {
             "elapsed": elapsed,
@@ -328,7 +635,7 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
             c_red = curses.color_pair(3) | curses.A_BOLD
             c_faded = curses.color_pair(4) | curses.A_BOLD  # Crisp, readable light gray (bold)
             c_yellow = curses.color_pair(5) | curses.A_BOLD
-            c_white = curses.color_pair(6) | curses.A_BOLD  # Bright bold white for whole active word
+            c_white = curses.color_pair(6) | curses.A_BOLD  # Bright bold white
             c_highlight = curses.color_pair(7) | curses.A_BOLD
         except curses.error:
             pass
@@ -339,11 +646,16 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
     engine = TypingEngine(mode=initial_mode, custom_text=custom_text)
     last_stats = None
 
+    last_pressed_char = None
+    last_key_press_time = 0.0
+    last_press_was_correct = True
+    drill_button_bounds = (0, 0)
+
     while True:
         stdscr.erase()
         max_y, max_x = stdscr.getmaxyx()
 
-        if max_y < 10 or max_x < 38:
+        if max_y < 12 or max_x < 40:
             safe_addstr(stdscr, 1, 2, "Please enlarge terminal window to play...", curses.A_BOLD)
             stdscr.refresh()
             time.sleep(0.1)
@@ -357,15 +669,18 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
 
         stats = engine.get_stats()
         last_stats = stats
+        curr_idx = len(engine.typed_chars)
+        target = engine.target_text
 
         # ==========================================
-        # 1. TOP BAR (Clickable with mouse, 1, 2)
+        # 1. TOP BAR (Clickable with mouse, 1, 2, 3)
         # ==========================================
-        btn_sprint = "[ 1: Sprint ]" if max_x < 55 else "[ 1: ⚡ Sprint ]"
-        btn_endless = "[ 2: Endless ]" if max_x < 55 else "[ 2: ♾️ Endless ]"
+        btn_sprint = "[ 1: Sprint ]" if max_x < 65 else "[ 1: ⚡ Sprint ]"
+        btn_endless = "[ 2: Endless ]" if max_x < 65 else "[ 2: ♾️ Endless ]"
+        btn_tutor = "[ 3: Tutor ]" if max_x < 65 else "[ 3: 🖐️ Tutor ]"
 
         top_buttons = []
-        cur_btn_x = 1 if max_x < 55 else 2
+        cur_btn_x = 1 if max_x < 65 else 2
 
         # Button 1: Sprint
         is_sprint = (engine.mode == "SPRINT")
@@ -379,168 +694,347 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
         endless_attr = (curses.A_REVERSE | c_yellow) if is_endless else c_white
         safe_addstr(stdscr, 0, cur_btn_x, btn_endless, endless_attr)
         top_buttons.append((cur_btn_x, cur_btn_x + len(btn_endless), "ENDLESS"))
+        cur_btn_x += len(btn_endless) + 1
+
+        # Button 3: Tutor
+        is_tutor = (engine.mode == "TUTOR")
+        tutor_attr = (curses.A_REVERSE | c_cyan) if is_tutor else c_white
+        safe_addstr(stdscr, 0, cur_btn_x, btn_tutor, tutor_attr)
+        top_buttons.append((cur_btn_x, cur_btn_x + len(btn_tutor), "TUTOR"))
 
         # Right-aligned exit button
-        exit_label = "[ESC]" if max_x < 55 else "[ESC: Exit]"
-        exit_x = max(cur_btn_x + len(btn_endless) + 1, max_x - len(exit_label) - 1)
+        exit_label = "[ESC]" if max_x < 65 else "[ESC: Exit]"
+        exit_x = max(cur_btn_x + len(btn_tutor) + 1, max_x - len(exit_label) - 1)
         safe_addstr(stdscr, 0, exit_x, exit_label, c_cyan)
 
         # Header divider
         safe_addstr(stdscr, 1, 2, "═" * (max_x - 4), c_cyan)
 
-        # ==========================================
-        # 2. PROMINENT STATS DASHBOARD
-        # ==========================================
-        time_str = f"⏱  {format_time(stats['elapsed'])}"
-        wpm_str = f"⚡ {stats['wpm']} WPM"
-        cpm_str = f"CPM: {stats['cpm']}"
-        acc_str = f"🎯 {stats['accuracy']}%"
-        err_str = f"❌ {stats['mistakes']} err"
-        prog_str = f"📝 {stats['words_completed']}/{stats['total_words']}"
-
-        if max_x >= 75:
-            stat_bar = f"{time_str}     {wpm_str}     {cpm_str}     {acc_str}     {err_str}     {prog_str}"
-        elif max_x >= 58:
-            stat_bar = f"{time_str}   {wpm_str}   {acc_str}   {err_str}   {prog_str}"
-        else:
-            stat_bar = f"{time_str}  {wpm_str}  {acc_str}  {err_str}"
-
-        stat_x = max(2, (max_x - len(stat_bar)) // 2)
-        safe_addstr(stdscr, 2, stat_x, stat_bar, curses.A_BOLD | c_highlight)
-        safe_addstr(stdscr, 3, 2, "─" * (max_x - 4), c_faded)
+        cursor_screen_x = 2
+        cursor_screen_y = 2
 
         # ==========================================
-        # 3. TYPING CANVAS (Active Word in Increased Font + Flowing Context)
+        # MODES 1 & 2: SPRINT & ENDLESS
         # ==========================================
-        curr_idx = len(engine.typed_chars)
-        target = engine.target_text
+        if engine.mode in ("SPRINT", "ENDLESS"):
+            time_str = f"⏱  {format_time(stats['elapsed'])}"
+            wpm_str = f"⚡ {stats['wpm']} WPM"
+            cpm_str = f"CPM: {stats['cpm']}"
+            acc_str = f"🎯 {stats['accuracy']}%"
+            err_str = f"❌ {stats['mistakes']} err"
+            prog_str = f"📝 {stats['words_completed']}/{stats['total_words']}"
 
-        # Determine active whole word boundaries
-        if curr_idx < len(target) and target[curr_idx] == ' ':
-            word_start = curr_idx
-            word_end = curr_idx + 1
-            active_word = "␣"
-            letter_in_word = 0
-            is_space_active = True
-        else:
-            word_start = target.rfind(' ', 0, curr_idx) + 1 if curr_idx > 0 else 0
-            word_end = target.find(' ', curr_idx)
-            if word_end == -1:
-                word_end = len(target)
-            active_word = target[word_start:word_end]
-            letter_in_word = curr_idx - word_start
-            is_space_active = False
-
-        # --- A. Render the Active Word in Increased Size (Guide + 2-Row Font) ---
-        char_entries = []
-        for char_pos, ch in enumerate(active_word):
-            g = get_glyph(ch)
-            gw = max(len(g[0]), len(g[1]), 1)
-            char_entries.append((ch, g, gw))
-
-        total_word_w = sum(gw for _, _, gw in char_entries) + max(0, len(char_entries) - 1)
-        word_start_x = max(2, (max_x - total_word_w) // 2)
-        word_start_y = 4 if max_y < 22 else 5
-
-        draw_x = word_start_x
-        cursor_screen_x = word_start_x
-        cursor_screen_y = word_start_y + 1
-
-        for char_pos, (ch, g, gw) in enumerate(char_entries):
-            if char_pos < letter_in_word:
-                typed_ch = engine.typed_chars[word_start + char_pos]
-                if typed_ch == ch:
-                    col = c_green
-                    guide_char = ch
-                else:
-                    col = c_red
-                    guide_char = typed_ch if typed_ch != ' ' else '_'
-            elif char_pos == letter_in_word:
-                col = c_white
-                guide_char = ch if not is_space_active else '␣'
-                cursor_screen_x = draw_x + (gw // 2)
-                cursor_screen_y = word_start_y + 1
+            if max_x >= 75:
+                stat_bar = f"{time_str}     {wpm_str}     {cpm_str}     {acc_str}     {err_str}     {prog_str}"
+            elif max_x >= 58:
+                stat_bar = f"{time_str}   {wpm_str}   {acc_str}   {err_str}   {prog_str}"
             else:
-                col = c_faded
-                guide_char = ch
+                stat_bar = f"{time_str}  {wpm_str}  {acc_str}  {err_str}"
 
-            guide_str = guide_char.center(gw)
-            if draw_x < max_x - 2:
-                safe_addstr(stdscr, word_start_y, draw_x, guide_str, col | curses.A_BOLD)
-                safe_addstr(stdscr, word_start_y + 1, draw_x, g[0].ljust(gw), col | curses.A_BOLD)
-                safe_addstr(stdscr, word_start_y + 2, draw_x, g[1].ljust(gw), col | curses.A_BOLD)
+            stat_x = max(2, (max_x - len(stat_bar)) // 2)
+            safe_addstr(stdscr, 2, stat_x, stat_bar, curses.A_BOLD | c_highlight)
+            safe_addstr(stdscr, 3, 2, "─" * (max_x - 4), c_faded)
 
-            draw_x += gw + 1
+            # Determine active whole word boundaries
+            if curr_idx < len(target) and target[curr_idx] == ' ':
+                word_start = curr_idx
+                word_end = curr_idx + 1
+                active_word = "␣"
+                letter_in_word = 0
+                is_space_active = True
+            else:
+                word_start = target.rfind(' ', 0, curr_idx) + 1 if curr_idx > 0 else 0
+                word_end = target.find(' ', curr_idx)
+                if word_end == -1:
+                    word_end = len(target)
+                active_word = target[word_start:word_end]
+                letter_in_word = curr_idx - word_start
+                is_space_active = False
 
-        # --- B. Sentence Flow Context ---
-        context_divider_y = word_start_y + 3
-        safe_addstr(stdscr, context_divider_y, 2, "─" * (max_x - 4), c_faded)
+            # Render Active Word in 2-Row Font
+            char_entries = []
+            for char_pos, ch in enumerate(active_word):
+                g = get_glyph(ch)
+                gw = max(len(g[0]), len(g[1]), 1)
+                char_entries.append((ch, g, gw))
 
-        text_start_y = context_divider_y + 1
-        wrap_width = max(24, min(max_x - 6, 80))
-        box_x = max(2, (max_x - wrap_width) // 2)
+            total_word_w = sum(gw for _, _, gw in char_entries) + max(0, len(char_entries) - 1)
+            word_start_x = max(2, (max_x - total_word_w) // 2)
+            word_start_y = 4 if max_y < 22 else 5
 
-        char_positions, total_rows = build_char_positions(engine.target_text, wrap_width)
+            draw_x = word_start_x
+            cursor_screen_x = word_start_x
+            cursor_screen_y = word_start_y + 1
 
-        if curr_idx in char_positions:
-            active_row = char_positions[curr_idx][0]
-        elif curr_idx > 0 and (curr_idx - 1) in char_positions:
-            active_row = char_positions[curr_idx - 1][0]
-        else:
-            active_row = 0
-
-        scroll_offset = max(0, active_row - 1)
-        visible_rows = max(1, (max_y - text_start_y - 4) // 2)
-
-        for i, target_ch in enumerate(engine.target_text):
-            if i not in char_positions:
-                continue
-
-            r, c = char_positions[i]
-            line_offset = r - scroll_offset
-            if line_offset < 0 or line_offset >= visible_rows:
-                continue
-
-            screen_y = text_start_y + (line_offset * 2)  # Double-spaced rows!
-            screen_x = box_x + c
-
-            if i < curr_idx:
-                typed_ch = engine.typed_chars[i]
-                if typed_ch == target_ch:
-                    safe_addstr(stdscr, screen_y, screen_x, target_ch, c_green)
-                else:
-                    if typed_ch == ' ':
-                        safe_addstr(stdscr, screen_y, screen_x, "_", c_red | curses.A_REVERSE)
+            for char_pos, (ch, g, gw) in enumerate(char_entries):
+                if char_pos < letter_in_word:
+                    typed_ch = engine.typed_chars[word_start + char_pos]
+                    if typed_ch == ch:
+                        col = c_green
+                        guide_char = ch
                     else:
-                        safe_addstr(stdscr, screen_y, screen_x, typed_ch, c_red | curses.A_UNDERLINE)
-            elif word_start <= i < word_end:
-                safe_addstr(stdscr, screen_y, screen_x, target_ch, c_white)
-            else:
-                safe_addstr(stdscr, screen_y, screen_x, target_ch, c_faded)
+                        col = c_red
+                        guide_char = typed_ch if typed_ch != ' ' else '_'
+                elif char_pos == letter_in_word:
+                    col = c_white
+                    guide_char = ch if not is_space_active else '␣'
+                    cursor_screen_x = draw_x + (gw // 2)
+                    cursor_screen_y = word_start_y + 1
+                else:
+                    col = c_faded
+                    guide_char = ch
 
-        # Completion Card (Sprint Mode)
-        if engine.completed:
-            card_y = max_y - 5
-            congrats = f"🏆 Sprint Finished! Speed: {stats['wpm']} WPM | Accuracy: {stats['accuracy']}% | Errors: {stats['mistakes']}"
-            prompt = "Press [ENTER] for next sentence, [1] / [2] to change mode, or [ESC] to quit."
-            safe_addstr(stdscr, card_y, 4, congrats, c_yellow)
-            safe_addstr(stdscr, card_y + 1, 4, prompt, c_white)
+                guide_str = guide_char.center(gw)
+                if draw_x < max_x - 2:
+                    safe_addstr(stdscr, word_start_y, draw_x, guide_str, col | curses.A_BOLD)
+                    safe_addstr(stdscr, word_start_y + 1, draw_x, g[0].ljust(gw), col | curses.A_BOLD)
+                    safe_addstr(stdscr, word_start_y + 2, draw_x, g[1].ljust(gw), col | curses.A_BOLD)
+
+                draw_x += gw + 1
+
+            # Sentence Flow Context
+            context_divider_y = word_start_y + 3
+            safe_addstr(stdscr, context_divider_y, 2, "─" * (max_x - 4), c_faded)
+
+            text_start_y = context_divider_y + 1
+            wrap_width = max(24, min(max_x - 6, 80))
+            box_x = max(2, (max_x - wrap_width) // 2)
+
+            char_positions, total_rows = build_char_positions(engine.target_text, wrap_width)
+
+            if curr_idx in char_positions:
+                active_row = char_positions[curr_idx][0]
+            elif curr_idx > 0 and (curr_idx - 1) in char_positions:
+                active_row = char_positions[curr_idx - 1][0]
+            else:
+                active_row = 0
+
+            scroll_offset = max(0, active_row - 1)
+            visible_rows = max(1, (max_y - text_start_y - 4) // 2)
+
+            for i, target_ch in enumerate(engine.target_text):
+                if i not in char_positions:
+                    continue
+
+                r, c = char_positions[i]
+                line_offset = r - scroll_offset
+                if line_offset < 0 or line_offset >= visible_rows:
+                    continue
+
+                screen_y = text_start_y + (line_offset * 2)
+                screen_x = box_x + c
+
+                if i < curr_idx:
+                    typed_ch = engine.typed_chars[i]
+                    if typed_ch == target_ch:
+                        safe_addstr(stdscr, screen_y, screen_x, target_ch, c_green)
+                    else:
+                        if typed_ch == ' ':
+                            safe_addstr(stdscr, screen_y, screen_x, "_", c_red | curses.A_REVERSE)
+                        else:
+                            safe_addstr(stdscr, screen_y, screen_x, typed_ch, c_red | curses.A_UNDERLINE)
+                elif word_start <= i < word_end:
+                    safe_addstr(stdscr, screen_y, screen_x, target_ch, c_white)
+                else:
+                    safe_addstr(stdscr, screen_y, screen_x, target_ch, c_faded)
+
+            # Completion Card (Sprint Mode)
+            if engine.completed:
+                card_y = max_y - 5
+                congrats = f"🏆 Sprint Finished! Speed: {stats['wpm']} WPM | Accuracy: {stats['accuracy']}% | Errors: {stats['mistakes']}"
+                prompt = "Press [ENTER] for next sentence, [1] / [2] / [3] to change mode, or [ESC] to quit."
+                safe_addstr(stdscr, card_y, 4, congrats, c_yellow)
+                safe_addstr(stdscr, card_y + 1, 4, prompt, c_white)
+
+        # ==========================================
+        # MODE 3: TOUCH TYPING TUTOR & FINGER GUIDE
+        # ==========================================
+        elif engine.mode == "TUTOR":
+            drill_info = TUTOR_DRILLS[engine.tutor_drill_idx] if not engine.custom_text else {
+                "name": "Custom Practice Text",
+                "desc": "Custom text loaded from CLI",
+                "text": engine.target_text
+            }
+
+            # Row 2: Drill info button + stats
+            drill_btn_text = f"[ 🔄 Drill ({engine.tutor_drill_idx + 1}/{len(TUTOR_DRILLS)}): {drill_info['name']} ]" if not engine.custom_text else "[ 🔄 Custom Text ]"
+            if len(drill_btn_text) > max_x - 32:
+                drill_btn_text = f"[ 🔄 Drill {engine.tutor_drill_idx + 1}: {drill_info['name'][:14]}.. ]"
+
+            safe_addstr(stdscr, 2, 2, drill_btn_text, curses.A_BOLD | c_highlight)
+            drill_button_bounds = (2, 2 + len(drill_btn_text))
+
+            stats_info = f"🎯 {stats['accuracy']}%   ⚡ {stats['wpm']} WPM   ⏱ {format_time(stats['elapsed'])}"
+            stats_x = max(2 + len(drill_btn_text) + 2, max_x - len(stats_info) - 2)
+            safe_addstr(stdscr, 2, stats_x, stats_info, c_white)
+            safe_addstr(stdscr, 3, 2, "─" * (max_x - 4), c_faded)
+
+            # Row 4: Practice Sentence Display or Free Key Explorer Prompt
+            if target:
+                wrap_w = min(max_x - 6, 76)
+                text_start_x = max(2, (max_x - min(len(target), wrap_w)) // 2)
+                scroll_start = max(0, curr_idx - (wrap_w // 2))
+                visible_slice = target[scroll_start:scroll_start + wrap_w]
+
+                for s_idx, ch in enumerate(visible_slice):
+                    actual_idx = scroll_start + s_idx
+                    draw_col = text_start_x + s_idx
+
+                    if actual_idx < curr_idx:
+                        typed_ch = engine.typed_chars[actual_idx]
+                        if typed_ch == ch:
+                            attr = c_green
+                            disp_ch = ch
+                        else:
+                            attr = c_red | curses.A_UNDERLINE
+                            disp_ch = typed_ch if typed_ch != ' ' else '_'
+                    elif actual_idx == curr_idx:
+                        attr = curses.A_REVERSE | c_white | curses.A_BOLD
+                        disp_ch = ch if ch != ' ' else '␣'
+                        cursor_screen_x = draw_col
+                        cursor_screen_y = 4
+                    else:
+                        attr = c_faded
+                        disp_ch = ch
+
+                    safe_addstr(stdscr, 4, draw_col, disp_ch, attr)
+            else:
+                explorer_msg = "⌨️  Press ANY key on your keyboard to test its finger and hand position!"
+                exp_x = max(2, (max_x - len(explorer_msg)) // 2)
+                safe_addstr(stdscr, 4, exp_x, explorer_msg, curses.A_BOLD | c_cyan)
+
+            # Determine active character to guide
+            if target and curr_idx < len(target):
+                active_ch = target[curr_idx]
+            elif last_pressed_char is not None:
+                active_ch = last_pressed_char
+            else:
+                active_ch = 'f'  # Default prompt to home key 'F'
+
+            info = KEY_FINGER_MAP.get(active_ch, ('THUMB', 'Thumb (Space)', 'Rest on Spacebar'))
+            finger_code, finger_name, finger_hint = info
+
+            # Row 5: Finger Guide Banner
+            now = time.time()
+            if now - last_key_press_time < 1.3 and last_pressed_char is not None:
+                if last_press_was_correct:
+                    p_info = KEY_FINGER_MAP.get(last_pressed_char, ('THUMB', 'Thumb', ''))
+                    disp_key = repr_ch(last_pressed_char)
+                    banner = f"✅ Key: [ {disp_key} ] ➔ {p_info[1].upper()}  |  {p_info[2]}"
+                    banner_attr = curses.A_BOLD | c_green
+                else:
+                    wrong_info = KEY_FINGER_MAP.get(last_pressed_char, ('?', 'Unknown', ''))
+                    disp_wrong = repr_ch(last_pressed_char)
+                    disp_target = repr_ch(active_ch)
+                    banner = f"❌ Pressed [ {disp_wrong} ] ({wrong_info[1]}) ➔ Target is [ {disp_target} ] ({finger_name})"
+                    banner_attr = curses.A_BOLD | c_red
+            else:
+                disp_target = repr_ch(active_ch)
+                banner = f"👉 Target Key: [ {disp_target} ] ➔ {finger_name.upper()}  |  {finger_hint}"
+                banner_attr = curses.A_BOLD | c_highlight
+
+            ban_x = max(2, (max_x - len(banner)) // 2)
+            safe_addstr(stdscr, 5, ban_x, banner, banner_attr)
+            safe_addstr(stdscr, 6, 2, "─" * (max_x - 4), c_faded)
+
+            # Rows 7..11: Centered Keyboard Layout (5 rows)
+            kb_x = max(2, (max_x - 59) // 2)
+            base_target = get_base_key(active_ch)
+            shift_needed = needs_shift(active_ch)
+            side = finger_side(active_ch)
+
+            for r_idx, (indent, row_keys) in enumerate(KEYBOARD_LAYOUT):
+                ky = 7 + r_idx
+                kx = kb_x + indent
+                for key_id, k_finger, label in row_keys:
+                    is_target = (key_id == base_target)
+                    is_shift = shift_needed and (
+                        (key_id == "Shift_L" and side == "RIGHT") or
+                        (key_id == "Shift_R" and side == "LEFT")
+                    )
+                    is_error = (
+                        not last_press_was_correct and
+                        (now - last_key_press_time < 1.3) and
+                        last_pressed_char is not None and
+                        get_base_key(last_pressed_char) == key_id
+                    )
+
+                    if is_error:
+                        k_attr = curses.A_REVERSE | c_red | curses.A_BOLD
+                    elif is_target:
+                        k_attr = curses.A_REVERSE | c_green | curses.A_BOLD
+                    elif is_shift:
+                        k_attr = curses.A_REVERSE | c_cyan | curses.A_BOLD
+                    elif key_id in ("a", "s", "d", "f", "j", "k", "l", ";"):
+                        k_attr = c_faded | curses.A_UNDERLINE
+                    else:
+                        k_attr = c_faded
+
+                    safe_addstr(stdscr, ky, kx, label, k_attr)
+                    kx += len(label) + 1
+
+            # Rows 13+: Hand Diagram (Full / Compact / Minimal)
+            hands_y = 13
+            available_rows = (max_y - 2) - hands_y
+            active_ranges = FINGER_RANGES.get(finger_code, [])
+
+            if available_rows >= 11:
+                # Full 11-line ASCII art hands
+                hx = max(2, (max_x - 60) // 2)
+                for line_idx, line in enumerate(HAND_LINES):
+                    hy = hands_y + line_idx
+                    for col_idx, ch in enumerate(line):
+                        in_active = any(s <= col_idx < e for s, e in active_ranges)
+                        if in_active and ch != " ":
+                            safe_addstr(stdscr, hy, hx + col_idx, ch, c_green | curses.A_BOLD)
+                        else:
+                            safe_addstr(stdscr, hy, hx + col_idx, ch, c_faded)
+
+            elif available_rows >= 4:
+                # Compact 4-line hands diagram
+                hx = max(2, (max_x - 60) // 2)
+                for line_idx, line in enumerate(COMPACT_HAND_LINES):
+                    hy = hands_y + line_idx
+                    for col_idx, ch in enumerate(line):
+                        in_active = any(s <= col_idx < e for s, e in active_ranges)
+                        if in_active and ch != " ":
+                            safe_addstr(stdscr, hy, hx + col_idx, ch, c_green | curses.A_BOLD)
+                        else:
+                            safe_addstr(stdscr, hy, hx + col_idx, ch, c_faded)
+
+            elif available_rows >= 1:
+                # Minimal 1-line finger bar
+                min_bar = f"FINGER: [ {finger_name.upper()} ]  ({finger_hint})"
+                safe_addstr(stdscr, hands_y, max(2, (max_x - len(min_bar)) // 2), min_bar, c_green | curses.A_BOLD)
+
+            # Completion Card (if drill completed)
+            if engine.completed:
+                card_y = max_y - 4
+                congrats = f"🏆 Drill Finished! Speed: {stats['wpm']} WPM | Accuracy: {stats['accuracy']}%"
+                prompt = "Press [ENTER] for next drill, [1] / [2] to change mode, or [ESC] to quit."
+                safe_addstr(stdscr, card_y, 4, congrats, c_yellow)
+                safe_addstr(stdscr, card_y + 1, 4, prompt, c_white)
 
         # ==========================================
         # 4. FOOTER & SHORTCUTS
         # ==========================================
         footer_y = max_y - 2
         safe_addstr(stdscr, footer_y - 1, 2, "─" * (max_x - 4), c_faded)
-        if max_x < 50:
-            controls = "[1/2] Mode  [Back] Fix  [ESC] Exit"
-        elif max_x < 65:
-            controls = "[1/2] Mode  [Back] Fix  [Ctrl+R] Reset  [ESC] Exit"
+        if engine.mode == "TUTOR":
+            if max_x < 65:
+                controls = "[1/2/3] Mode  [Enter] Next Drill  [Back] Fix  [ESC] Exit"
+            else:
+                controls = "[1/2/3] Mode   [Enter/F2] Next Drill   [Space] Key   [Back] Fix   [Ctrl+R] Reset   [ESC] Exit"
         else:
-            controls = "[1/2] Mode   [Space] Key   [Backspace] Fix   [Ctrl+R] Reset   [ESC] Exit"
+            if max_x < 50:
+                controls = "[1/2/3] Mode  [Back] Fix  [ESC] Exit"
+            elif max_x < 65:
+                controls = "[1/2/3] Mode  [Back] Fix  [Ctrl+R] Reset  [ESC] Exit"
+            else:
+                controls = "[1/2/3] Mode   [Space] Key   [Backspace] Fix   [Ctrl+R] Reset   [ESC] Exit"
         if engine.completed:
             controls = "[ENTER] Next  " + controls
         safe_addstr(stdscr, footer_y, 2, controls, c_cyan)
-
 
         # Move terminal cursor to active position
         try:
@@ -572,7 +1066,14 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
                                 engine.switch_mode("SPRINT")
                             elif action == "ENDLESS":
                                 engine.switch_mode("ENDLESS")
+                            elif action == "TUTOR":
+                                engine.switch_mode("TUTOR")
                             break
+                elif my == 2 and engine.mode == "TUTOR" and (bstate & (curses.BUTTON1_CLICKED | curses.BUTTON1_PRESSED | curses.BUTTON1_RELEASED)):
+                    bx1, bx2 = drill_button_bounds
+                    if bx1 <= mx <= bx2:
+                        engine.next_drill()
+                        last_pressed_char = None
             except curses.error:
                 pass
             continue
@@ -584,25 +1085,54 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
             engine.switch_mode("SPRINT")
         elif ch == ord('2') and (len(engine.typed_chars) == 0 or (curr_idx < len(engine.target_text) and engine.target_text[curr_idx] != '2')):
             engine.switch_mode("ENDLESS")
-        elif ch == 9:  # TAB -> toggle mode
-            next_mode = "ENDLESS" if engine.mode == "SPRINT" else "SPRINT"
-            engine.switch_mode(next_mode)
+        elif ch == ord('3') and (len(engine.typed_chars) == 0 or (curr_idx < len(engine.target_text) and engine.target_text[curr_idx] != '3')):
+            engine.switch_mode("TUTOR")
+        elif ch == 9:  # TAB -> cycle modes SPRINT -> ENDLESS -> TUTOR -> SPRINT
+            mode_cycle = {"SPRINT": "ENDLESS", "ENDLESS": "TUTOR", "TUTOR": "SPRINT"}
+            engine.switch_mode(mode_cycle.get(engine.mode, "SPRINT"))
         elif ch in (18, 263, curses.KEY_F5):  # Ctrl+R or F5 -> Reset
             engine.reset()
+            last_pressed_char = None
         elif ch in (curses.KEY_BACKSPACE, 127, 8, ord('\b')):
             engine.backspace()
+            last_pressed_char = None
         elif ch in (10, 13, curses.KEY_ENTER):
-            if engine.completed:
+            if engine.mode == "TUTOR":
+                if engine.completed or not engine.target_text:
+                    engine.next_drill()
+                    last_pressed_char = None
+            elif engine.completed:
                 engine.reset()
+        elif ch == curses.KEY_F2:
+            if engine.mode == "TUTOR":
+                engine.next_drill()
+                last_pressed_char = None
         elif 32 <= ch <= 126:  # Printable ASCII characters (INCLUDING SPACE 32!)
-            engine.add_char(chr(ch))
+            pressed_char = chr(ch)
+            last_pressed_char = pressed_char
+            last_key_press_time = time.time()
+
+            if engine.mode == "TUTOR":
+                if not engine.target_text:
+                    # Free Key Explorer
+                    engine.total_keystrokes += 1
+                    last_press_was_correct = True
+                else:
+                    if curr_idx < len(engine.target_text):
+                        if pressed_char == engine.target_text[curr_idx]:
+                            last_press_was_correct = True
+                        else:
+                            last_press_was_correct = False
+                        engine.add_char(pressed_char)
+            else:
+                engine.add_char(pressed_char)
 
     return last_stats, engine.mode
 
 def main():
     parser = argparse.ArgumentParser(
         prog="ttyping",
-        description="Terminal Typing Game - Sprint WPM testing & Endless key mastery",
+        description="Terminal Typing Game - Sprint WPM testing, Endless practice & Touch Typing Tutor",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Modes:
   1: Sprint   - Simple, natural sentences you finish in 1-2 minutes to test your WPM.
@@ -611,16 +1141,24 @@ def main():
                 * Special symbols appear once every 200 words
                 * Comma and fullstop appear once every ~35 words
                 * Clean arbitrary words in between
+  3: Tutor    - Interactive Touch Typing Tutor:
+                * Full QWERTY keyboard layout
+                * Faded hand & finger positions (Left & Right hands)
+                * Real-time finger guidance for every key you type
+                * Free Key Explorer drill to test any key on your keyboard
 """
     )
     parser.add_argument("-1", "--sprint", action="store_true", help="Launch directly in Sprint Mode (1-2 min WPM test)")
     parser.add_argument("-2", "--endless", action="store_true", help="Launch directly in Endless Mode (controlled practice)")
+    parser.add_argument("-3", "--tutor", action="store_true", help="Launch directly in Tutor Mode (QWERTY touch typing finger guide)")
     parser.add_argument("custom", nargs="*", help="Optional custom text or sentence to practice")
 
     args = parser.parse_args()
 
     mode = "SPRINT"
-    if args.endless:
+    if args.tutor:
+        mode = "TUTOR"
+    elif args.endless:
         mode = "ENDLESS"
     elif args.sprint:
         mode = "SPRINT"
@@ -650,4 +1188,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

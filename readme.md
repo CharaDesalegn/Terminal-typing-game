@@ -31,18 +31,34 @@ A lightweight, responsive, and distraction-free terminal typing speed and practi
   * 🔢 **Numbers:** Appear once every **100 words** to practice the number row.
   * ⚙️ **Special Symbols & Code:** Appear once every **200 words** for occasional dexterity challenges.
 
+### 3. 🖐️ Touch Typing Tutor (Finger Guide Mode)
+* **Goal:** Master proper 10-finger touch typing mechanics with visual keyboard and hand guidance.
+* **⌨️ Full QWERTY Layout:** Displays every key in standard QWERTY alignment with home row resting position indicators (`[A] [S] [D] [F]` and `[J] [K] [L] [;]`).
+* **🖐️ Faded Hand & Finger Positions:** Renders Left and Right hands with all 10 fingers (*Pinky*, *Ring*, *Middle*, *Index*, *Thumb*) faded in subtle gray.
+* **✨ Real-Time Finger Highlighting:** When a key needs to be typed, the key on the keyboard and its corresponding finger on the hand diagram light up in bright bold neon green.
+* **🎯 Key-by-Key Accuracy Feedback:** Shows immediate guidance (e.g. `👉 Key: [ E ] ➔ LEFT MIDDLE FINGER (Reach up from [D])`). If a mistake is made, it alerts you which finger you used vs which finger was expected.
+* **📚 6 Built-in Drills:**
+  1. **🦊 Pangram:** Full alphabet drill covering all 26 letters across both hands.
+  2. **🏠 Home Row Mastery:** Rest position practice (`ASDF` and `JKL;`).
+  3. **⬆️ Top Row Reach:** Upward reaches (`QWERTY UIOP`).
+  4. **⬇️ Bottom Row Reach:** Downward reaches (`ZXCV BNM`).
+  5. **🔢 Numbers & Symbols:** Number row and punctuation drills.
+  6. **⌨️ Free Key Explorer:** Press ANY key on your keyboard to instantly see which finger and hand to use!
+
 ---
 
 ## 🕹️ Mode Selection
 
-1. **🖱️ Mouse:** Click directly on `[ 1: ⚡ Sprint ]` or `[ 2: ♾️ Endless ]` on the top bar.
+1. **🖱️ Mouse:** Click directly on `[ 1: ⚡ Sprint ]`, `[ 2: ♾️ Endless ]`, or `[ 3: 🖐️ Tutor ]` on the top bar.
 2. **⌨️ Keyboard:**
-   * **`1` / `2`:** Switch between Sprint and Endless modes.
-   * **`TAB`:** Cycle modes.
+   * **`1` / `2` / `3`:** Switch directly to Sprint, Endless, or Tutor mode.
+   * **`TAB`:** Cycle through all modes.
+   * **`ENTER` / `F2`:** Advance to the next drill in Tutor mode.
 3. **💻 CLI Flags:**
    ```bash
    ttyping --sprint     # Launch in Sprint Mode (or: ttyping -1)
    ttyping --endless    # Launch in Endless Mode (or: ttyping -2)
+   ttyping --tutor      # Launch in Touch Typing Tutor Mode (or: ttyping -3)
    ```
 
 ---
