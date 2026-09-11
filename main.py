@@ -320,7 +320,7 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
         stdscr.erase()
         max_y, max_x = stdscr.getmaxyx()
 
-        if max_y < 14 or max_x < 55:
+        if max_y < 10 or max_x < 38:
             safe_addstr(stdscr, 1, 2, "Please enlarge terminal window to play...", curses.A_BOLD)
             stdscr.refresh()
             time.sleep(0.1)
@@ -372,9 +372,15 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
         cpm_str = f"CPM: {stats['cpm']}"
         acc_str = f"🎯 {stats['accuracy']}%"
         err_str = f"❌ {stats['mistakes']} err"
-        prog_str = f"📝 {stats['words_completed']}/{stats['total_words']} words"
+        prog_str = f"📝 {stats['words_completed']}/{stats['total_words']}"
 
-        stat_bar = f"{time_str}     {wpm_str}     {cpm_str}     {acc_str}     {err_str}     {prog_str}"
+        if max_x >= 75:
+            stat_bar = f"{time_str}     {wpm_str}     {cpm_str}     {acc_str}     {err_str}     {prog_str}"
+        elif max_x >= 58:
+            stat_bar = f"{time_str}   {wpm_str}   {acc_str}   {err_str}   {prog_str}"
+        else:
+            stat_bar = f"{time_str}  {wpm_str}  {acc_str}  {err_str}"
+
         stat_x = max(2, (max_x - len(stat_bar)) // 2)
         safe_addstr(stdscr, 2, stat_x, stat_bar, curses.A_BOLD | c_highlight)
         safe_addstr(stdscr, 3, 2, "─" * (max_x - 4), c_faded)
@@ -391,8 +397,8 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
         if word_end == -1:
             word_end = len(target)
 
-        wrap_width = max(30, min(max_x - 8, 80))
-        box_x = max(4, (max_x - wrap_width) // 2)
+        wrap_width = max(24, min(max_x - 6, 80))
+        box_x = max(2, (max_x - wrap_width) // 2)
 
         char_positions, total_rows = build_char_positions(engine.target_text, wrap_width)
 
