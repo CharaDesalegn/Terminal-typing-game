@@ -114,11 +114,6 @@ def format_time(seconds):
 
 TUTOR_DRILLS = [
     {
-        "name": "Pangram (All 26 Letters)",
-        "desc": "Covers every single letter on the keyboard across both hands",
-        "text": "the quick brown fox jumps over the lazy dog."
-    },
-    {
         "name": "Home Row Mastery",
         "desc": "Practice resting home keys (ASDF and JKL;)",
         "text": "asdf jkl; sad dad fad lad ask fads flasks salads"
@@ -132,6 +127,11 @@ TUTOR_DRILLS = [
         "name": "Bottom Row Reach",
         "desc": "Reach downward from home row (ZXCV BNM)",
         "text": "zxcv bnm, . zinc menu comb vexing cab move"
+    },
+    {
+        "name": "Pangram (All 26 Letters)",
+        "desc": "Covers every single letter on the keyboard across both hands",
+        "text": "the quick brown fox jumps over the lazy dog."
     },
     {
         "name": "Numbers & Symbols",
@@ -296,6 +296,12 @@ KEY_FINGER_MAP = {
     "?": ("RP", "Right Pinky (with Left Shift)", "Reach down from [;]"),
     "Enter": ("RP", "Right Pinky", "Far right of home row"),
     "Bksp": ("RP", "Right Pinky", "Far right of number row"),
+    "Ctrl_L": ("LP", "Left Pinky", "Bottom-left corner"),
+    "Alt_L": ("LR", "Left Ring / Thumb", "Bottom row left"),
+    "Alt_R": ("RR", "Right Ring / Thumb", "Bottom row right"),
+    "Ctrl_R": ("RP", "Right Pinky", "Bottom-right corner"),
+    "Shift_L": ("LP", "Left Pinky", "Left Shift key"),
+    "Shift_R": ("RP", "Right Pinky", "Right Shift key"),
 }
 
 def finger_side(ch):
@@ -309,46 +315,86 @@ def finger_side(ch):
         return "RIGHT"
     return "THUMB"
 
+def get_tutor_instruction(active_ch, last_pressed, was_correct, press_elapsed, target_exists, target_char_mistyped=None):
+    if not target_exists:
+        if last_pressed is not None and press_elapsed < 3.0:
+            info = KEY_FINGER_MAP.get(last_pressed, ('THUMB', 'Thumb', 'Rest on Spacebar'))
+            return f"👉 Key: [ {repr_ch(last_pressed)} ] ➔ Use {info[1].upper()}  |  {info[2]}", "highlight"
+        return "👉 Press ANY key on your keyboard to test which finger and hand to use!", "cyan"
+
+    if active_ch is None:
+        return "🏆 Drill Finished! Press [ENTER] for next drill.", "yellow"
+
+    info = KEY_FINGER_MAP.get(active_ch, ('THUMB', 'Thumb (Space)', 'Rest on Spacebar'))
+    finger_code, finger_name, finger_hint = info
+    disp_target = repr_ch(active_ch)
+    shift = needs_shift(active_ch)
+    side = finger_side(active_ch)
+
+    if shift:
+        shift_key = "RIGHT SHIFT" if side == "LEFT" else "LEFT SHIFT"
+        shift_finger = "Right Pinky" if side == "LEFT" else "Left Pinky"
+        action = f"Hold [ {shift_key} ] ({shift_finger}) + Press [ {disp_target} ] with {finger_name.upper()}"
+    elif active_ch == ' ':
+        action = f"Press [ SPACE ] with {finger_name.upper()}  |  {finger_hint}"
+    else:
+        action = f"Press [ {disp_target} ] with {finger_name.upper()}  |  {finger_hint}"
+
+    # If there was a typo recently:
+    if not was_correct and press_elapsed < 2.0 and last_pressed is not None:
+        wrong_info = KEY_FINGER_MAP.get(last_pressed, ('?', 'Unknown', ''))
+        disp_wrong = repr_ch(last_pressed)
+        exp_ch = repr_ch(target_char_mistyped) if target_char_mistyped else disp_target
+        return f"❌ Typo: pressed [ {disp_wrong} ] ({wrong_info[1]}) ➔ Expected [ {exp_ch} ]. Press [Back] to fix!", "red"
+
+    # If there was a correct key recently:
+    if was_correct and press_elapsed < 0.8 and last_pressed is not None:
+        return f"✅ Nice!  👉 {action}", "green"
+
+    return f"👉 {action}", "highlight"
+
+# 60-column true ANSI QWERTY keyboard layout:
+# Every row is exactly 60 characters wide with authentic key staggering
 KEYBOARD_LAYOUT = [
-    # Row 0 (58 cols)
-    (0, [
+    # Row 0 (60 cols): 13 keys * 4 = 52, plus [ Bksp ] (8) = 60
+    [
         ("`", "LP", "[`]"), ("1", "LP", "[1]"), ("2", "LR", "[2]"), ("3", "LM", "[3]"),
         ("4", "LI", "[4]"), ("5", "LI", "[5]"), ("6", "RI", "[6]"), ("7", "RI", "[7]"),
         ("8", "RM", "[8]"), ("9", "RR", "[9]"), ("0", "RP", "[0]"), ("-", "RP", "[-]"),
-        ("=", "RP", "[=]"), ("Bksp", "RP", "[Bksp]")
-    ]),
-    # Row 1 (58 cols)
-    (1, [
+        ("=", "RP", "[=]"), ("Bksp", "RP", "[ Bksp ]")
+    ],
+    # Row 1 (60 cols): [Tab] (5) + 1 gap + 12 keys * 4 (48) + [  \ ] (6) = 60
+    [
         ("Tab", "LP", "[Tab]"), ("q", "LP", "[Q]"), ("w", "LR", "[W]"), ("e", "LM", "[E]"),
         ("r", "LI", "[R]"), ("t", "LI", "[T]"), ("y", "RI", "[Y]"), ("u", "RI", "[U]"),
-        ("i", "RM", "[I]"), ("o", "RR", "[O]"), ("p", "RP", "[P]"), ("[", "RP", "[[]"),
-        ("]", "RP", "[]]"), ("\\", "RP", "[\\]")
-    ]),
-    # Row 2 (59 cols)
-    (1, [
-        ("Caps", "LP", "[Caps]"), ("a", "LP", "[A]"), ("s", "LR", "[S]"), ("d", "LM", "[D]"),
+        ("i", "RM", "[I]"), ("o", "RR", "[O]"), ("p", "RP", "[P]"), ("[", "RP", "[{]"),
+        ("]", "RP", "[}]"), ("\\", "RP", "[  \\ ]")
+    ],
+    # Row 2 (60 cols): [ Caps ] (8) + 1 gap + 11 keys * 4 (44) + [Enter] (7) = 60
+    [
+        ("Caps", "LP", "[ Caps ]"), ("a", "LP", "[A]"), ("s", "LR", "[S]"), ("d", "LM", "[D]"),
         ("f", "LI", "[F]"), ("g", "LI", "[G]"), ("h", "RI", "[H]"), ("j", "RI", "[J]"),
-        ("k", "RM", "[K]"), ("l", "RR", "[L]"), (";", "RP", "[;]"), ("\x27", "RP", "[\x27]"),
+        ("k", "RM", "[K]"), ("l", "RR", "[L]"), (";", "RP", "[;]"), ("\x27", "RP", "[']"),
         ("Enter", "RP", "[Enter]")
-    ]),
-    # Row 3 (57 cols)
-    (2, [
-        ("Shift_L", "LP", "[Shift]"), ("z", "LP", "[Z]"), ("x", "LR", "[X]"), ("c", "LM", "[C]"),
+    ],
+    # Row 3 (60 cols): [ Shift ] (9) + 1 gap + 10 keys * 4 (40) + [  Shift ] (10) = 60
+    [
+        ("Shift_L", "LP", "[ Shift ]"), ("z", "LP", "[Z]"), ("x", "LR", "[X]"), ("c", "LM", "[C]"),
         ("v", "LI", "[V]"), ("b", "LI", "[B]"), ("n", "RI", "[N]"), ("m", "RI", "[M]"),
-        (",", "RM", "[,]"), (".", "RR", "[.]"), ("/", "RP", "[/]"), ("Shift_R", "RP", "[Shift]")
-    ]),
-    # Row 4 (56 cols)
-    (5, [
-        (" ", "THUMB", "[                      SPACE                      ]")
-    ])
+        (",", "RM", "[,]"), (".", "RR", "[.]"), ("/", "RP", "[/]"), ("Shift_R", "RP", "[  Shift ]")
+    ],
+    # Row 4 (60 cols): [Ctrl] (6) + [Alt] (5) + Space (34) + [Alt] (5) + [Ctrl] (6) + 4 gaps = 60
+    [
+        ("Ctrl_L", "LP", "[Ctrl]"), ("Alt_L", "LR", "[Alt]"),
+        (" ", "THUMB", "[             SPACE              ]"),
+        ("Alt_R", "RR", "[Alt]"), ("Ctrl_R", "RP", "[Ctrl]")
+    ]
 ]
 
-# 11-line ASCII art hands (60 cols wide)
+# 9-line ASCII art hands (60 cols wide, fits comfortably on standard 24-row terminals)
 _LH_ART = [
-    "      LEFT HAND          ",
     " Pinky Ring Mid  Idx  Thb",
     "  [P]  [R]  [M]  [I]  [T] ",
-    "   │    │    │    │    │ ",
     "   │    │   ╭─╮   │    │ ",
     "  ╭─╮  ╭─╮  │ │  ╭─╮   │ ",
     "  │ │  │ │  │ │  │ │  ╭─╮",
@@ -359,10 +405,8 @@ _LH_ART = [
 ]
 
 _RH_ART = [
-    "         RIGHT HAND      ",
-    "Thb  Idx  Mid Ring Pinky ",
+    " Thb  Idx  Mid Ring Pinky",
     " [T]  [I]  [M]  [R]  [P] ",
-    "  │    │    │    │    │  ",
     "  │    │   ╭─╮   │    │  ",
     "  │   ╭─╮  │ │  ╭─╮  ╭─╮ ",
     " ╭─╮  │ │  │ │  │ │  │ │ ",
@@ -372,15 +416,9 @@ _RH_ART = [
     "   ╰───────────────────╯ "
 ]
 
-HAND_LINES = [f"{l:<25}          {r:<25}" for l, r in zip(_LH_ART, _RH_ART)]
-
-# 4-line compact hands diagram (60 cols wide)
-COMPACT_HAND_LINES = [
-    "      LEFT HAND (ASDF)                  RIGHT HAND (JKL;)     ",
-    " Pinky Ring Mid  Idx  Thb          Thb  Idx  Mid Ring Pinky ",
-    "  [P]  [R]  [M]  [I]  [T]           [T]  [I]  [M]  [R]  [P] ",
-    "  ───  ───  ───  ───  ───           ───  ───  ───  ───  ─── "
-]
+_LH_ART = [f"{line:<25}"[:25] for line in _LH_ART]
+_RH_ART = [f"{line:<25}"[:25] for line in _RH_ART]
+HAND_LINES = [f"{l}          {r}" for l, r in zip(_LH_ART, _RH_ART)]
 
 FINGER_RANGES = {
     "LP": [(0, 6)],
@@ -388,12 +426,12 @@ FINGER_RANGES = {
     "LM": [(11, 16)],
     "LI": [(16, 21)],
     "LT": [(21, 26)],
-    "RT": [(34, 39)],
-    "RI": [(39, 44)],
-    "RM": [(44, 49)],
-    "RR": [(49, 54)],
-    "RP": [(54, 60)],
-    "THUMB": [(21, 26), (34, 39)]
+    "RT": [(35, 40)],
+    "RI": [(40, 45)],
+    "RM": [(45, 50)],
+    "RR": [(50, 55)],
+    "RP": [(55, 60)],
+    "THUMB": [(21, 26), (35, 40)]
 }
 
 # ==============================================================================
@@ -649,16 +687,21 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
     last_pressed_char = None
     last_key_press_time = 0.0
     last_press_was_correct = True
+    last_target_mistyped = None
     drill_button_bounds = (0, 0)
+    drill_button_row = 2
 
     while True:
         stdscr.erase()
         max_y, max_x = stdscr.getmaxyx()
 
-        if max_y < 12 or max_x < 40:
-            safe_addstr(stdscr, 1, 2, "Please enlarge terminal window to play...", curses.A_BOLD)
+        if max_y < 20 or max_x < 62:
+            msg1 = "Please enlarge terminal window to play ttyping"
+            msg2 = f"Current size: {max_x}x{max_y}  |  Minimum required: 62x20"
+            safe_addstr(stdscr, max_y // 2 - 1, max(2, (max_x - len(msg1)) // 2), msg1, curses.A_BOLD | c_yellow)
+            safe_addstr(stdscr, max_y // 2, max(2, (max_x - len(msg2)) // 2), msg2, c_white)
             stdscr.refresh()
-            time.sleep(0.1)
+            time.sleep(0.05)
             try:
                 ch = stdscr.getch()
                 if ch in (27, 3):
@@ -675,12 +718,12 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
         # ==========================================
         # 1. TOP BAR (Clickable with mouse, 1, 2, 3)
         # ==========================================
-        btn_sprint = "[ 1: Sprint ]" if max_x < 65 else "[ 1: ⚡ Sprint ]"
-        btn_endless = "[ 2: Endless ]" if max_x < 65 else "[ 2: ♾️ Endless ]"
-        btn_tutor = "[ 3: Tutor ]" if max_x < 65 else "[ 3: 🖐️ Tutor ]"
+        btn_sprint = "[ 1: Sprint ]" if max_x < 70 else "[ 1: ⚡ Sprint ]"
+        btn_endless = "[ 2: Endless ]" if max_x < 70 else "[ 2: ♾️ Endless ]"
+        btn_tutor = "[ 3: Tutor ]" if max_x < 70 else "[ 3: 🖐️ Tutor ]"
 
         top_buttons = []
-        cur_btn_x = 1 if max_x < 65 else 2
+        cur_btn_x = 1 if max_x < 70 else 2
 
         # Button 1: Sprint
         is_sprint = (engine.mode == "SPRINT")
@@ -703,7 +746,7 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
         top_buttons.append((cur_btn_x, cur_btn_x + len(btn_tutor), "TUTOR"))
 
         # Right-aligned exit button
-        exit_label = "[ESC]" if max_x < 65 else "[ESC: Exit]"
+        exit_label = "[ESC]" if max_x < 70 else "[ESC: Exit]"
         exit_x = max(cur_btn_x + len(btn_tutor) + 1, max_x - len(exit_label) - 1)
         safe_addstr(stdscr, 0, exit_x, exit_label, c_cyan)
 
@@ -731,9 +774,14 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
             else:
                 stat_bar = f"{time_str}  {wpm_str}  {acc_str}  {err_str}"
 
+            # Vertical Centering (content height ~ 12 lines)
+            content_height = 12
+            avail_y = max(1, (max_y - 2) - 2)
+            start_y = 2 + max(0, (avail_y - content_height) // 2)
+
             stat_x = max(2, (max_x - len(stat_bar)) // 2)
-            safe_addstr(stdscr, 2, stat_x, stat_bar, curses.A_BOLD | c_highlight)
-            safe_addstr(stdscr, 3, 2, "─" * (max_x - 4), c_faded)
+            safe_addstr(stdscr, start_y, stat_x, stat_bar, curses.A_BOLD | c_highlight)
+            safe_addstr(stdscr, start_y + 1, 2, "─" * (max_x - 4), c_faded)
 
             # Determine active whole word boundaries
             if curr_idx < len(target) and target[curr_idx] == ' ':
@@ -760,7 +808,7 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
 
             total_word_w = sum(gw for _, _, gw in char_entries) + max(0, len(char_entries) - 1)
             word_start_x = max(2, (max_x - total_word_w) // 2)
-            word_start_y = 4 if max_y < 22 else 5
+            word_start_y = start_y + 2
 
             draw_x = word_start_x
             cursor_screen_x = word_start_x
@@ -797,7 +845,7 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
             safe_addstr(stdscr, context_divider_y, 2, "─" * (max_x - 4), c_faded)
 
             text_start_y = context_divider_y + 1
-            wrap_width = max(24, min(max_x - 6, 80))
+            wrap_width = min(max_x - 6, 68)
             box_x = max(2, (max_x - wrap_width) // 2)
 
             char_positions, total_rows = build_char_positions(engine.target_text, wrap_width)
@@ -827,20 +875,26 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
                 if i < curr_idx:
                     typed_ch = engine.typed_chars[i]
                     if typed_ch == target_ch:
-                        safe_addstr(stdscr, screen_y, screen_x, target_ch, c_green)
+                        if target_ch == ' ':
+                            safe_addstr(stdscr, screen_y, screen_x, "␣", c_green | curses.A_BOLD)
+                        else:
+                            safe_addstr(stdscr, screen_y, screen_x, target_ch, c_green)
                     else:
                         if typed_ch == ' ':
                             safe_addstr(stdscr, screen_y, screen_x, "_", c_red | curses.A_REVERSE)
                         else:
                             safe_addstr(stdscr, screen_y, screen_x, typed_ch, c_red | curses.A_UNDERLINE)
                 elif word_start <= i < word_end:
-                    safe_addstr(stdscr, screen_y, screen_x, target_ch, c_white)
+                    if is_space_active and target_ch == ' ':
+                        safe_addstr(stdscr, screen_y, screen_x, "␣", c_white | curses.A_REVERSE)
+                    else:
+                        safe_addstr(stdscr, screen_y, screen_x, target_ch, c_white)
                 else:
                     safe_addstr(stdscr, screen_y, screen_x, target_ch, c_faded)
 
             # Completion Card (Sprint Mode)
             if engine.completed:
-                card_y = max_y - 5
+                card_y = min(max_y - 5, text_start_y + (visible_rows * 2) + 1)
                 congrats = f"🏆 Sprint Finished! Speed: {stats['wpm']} WPM | Accuracy: {stats['accuracy']}% | Errors: {stats['mistakes']}"
                 prompt = "Press [ENTER] for next sentence, [1] / [2] / [3] to change mode, or [ESC] to quit."
                 safe_addstr(stdscr, card_y, 4, congrats, c_yellow)
@@ -856,22 +910,35 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
                 "text": engine.target_text
             }
 
-            # Row 2: Drill info button + stats
+            # Vertical Centering (Total content height = 19 lines: fits on standard 24-row terminals)
+            content_height = 19
+            avail_y = max(1, (max_y - 2) - 2)
+            start_y = 2 + max(0, (avail_y - content_height) // 2)
+
+            row_drill = start_y
+            row_sentence = start_y + 1
+            row_banner = start_y + 2
+            row_divider = start_y + 3
+            row_keyboard = start_y + 4
+            row_hands = start_y + 10
+
+            drill_button_row = row_drill
+
+            # Row: Drill info button + stats
             drill_btn_text = f"[ 🔄 Drill ({engine.tutor_drill_idx + 1}/{len(TUTOR_DRILLS)}): {drill_info['name']} ]" if not engine.custom_text else "[ 🔄 Custom Text ]"
             if len(drill_btn_text) > max_x - 32:
                 drill_btn_text = f"[ 🔄 Drill {engine.tutor_drill_idx + 1}: {drill_info['name'][:14]}.. ]"
 
-            safe_addstr(stdscr, 2, 2, drill_btn_text, curses.A_BOLD | c_highlight)
+            safe_addstr(stdscr, row_drill, 2, drill_btn_text, curses.A_BOLD | c_highlight)
             drill_button_bounds = (2, 2 + len(drill_btn_text))
 
             stats_info = f"🎯 {stats['accuracy']}%   ⚡ {stats['wpm']} WPM   ⏱ {format_time(stats['elapsed'])}"
             stats_x = max(2 + len(drill_btn_text) + 2, max_x - len(stats_info) - 2)
-            safe_addstr(stdscr, 2, stats_x, stats_info, c_white)
-            safe_addstr(stdscr, 3, 2, "─" * (max_x - 4), c_faded)
+            safe_addstr(stdscr, row_drill, stats_x, stats_info, c_white)
 
-            # Row 4: Practice Sentence Display or Free Key Explorer Prompt
+            # Row: Practice Sentence Display or Free Key Explorer Prompt
             if target:
-                wrap_w = min(max_x - 6, 76)
+                wrap_w = min(max_x - 6, 60)
                 text_start_x = max(2, (max_x - min(len(target), wrap_w)) // 2)
                 scroll_start = max(0, curr_idx - (wrap_w // 2))
                 visible_slice = target[scroll_start:scroll_start + wrap_w]
@@ -883,78 +950,75 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
                     if actual_idx < curr_idx:
                         typed_ch = engine.typed_chars[actual_idx]
                         if typed_ch == ch:
-                            attr = c_green
-                            disp_ch = ch
+                            attr = c_green | curses.A_BOLD
+                            disp_ch = ch if ch != ' ' else '␣'
                         else:
-                            attr = c_red | curses.A_UNDERLINE
+                            attr = c_red | curses.A_UNDERLINE | curses.A_BOLD
                             disp_ch = typed_ch if typed_ch != ' ' else '_'
                     elif actual_idx == curr_idx:
-                        attr = curses.A_REVERSE | c_white | curses.A_BOLD
+                        attr = curses.A_REVERSE | c_highlight | curses.A_BOLD
                         disp_ch = ch if ch != ' ' else '␣'
                         cursor_screen_x = draw_col
-                        cursor_screen_y = 4
+                        cursor_screen_y = row_sentence
                     else:
                         attr = c_faded
                         disp_ch = ch
 
-                    safe_addstr(stdscr, 4, draw_col, disp_ch, attr)
+                    safe_addstr(stdscr, row_sentence, draw_col, disp_ch, attr)
             else:
-                explorer_msg = "⌨️  Press ANY key on your keyboard to test its finger and hand position!"
+                explorer_msg = "⌨️  Free Key Explorer: Press ANY key to test which finger and hand to use!"
                 exp_x = max(2, (max_x - len(explorer_msg)) // 2)
-                safe_addstr(stdscr, 4, exp_x, explorer_msg, curses.A_BOLD | c_cyan)
+                safe_addstr(stdscr, row_sentence, exp_x, explorer_msg, curses.A_BOLD | c_cyan)
 
             # Determine active character to guide
             if target and curr_idx < len(target):
                 active_ch = target[curr_idx]
-            elif last_pressed_char is not None:
+            elif not target and last_pressed_char is not None:
                 active_ch = last_pressed_char
-            else:
+            elif not target:
                 active_ch = 'f'  # Default prompt to home key 'F'
-
-            info = KEY_FINGER_MAP.get(active_ch, ('THUMB', 'Thumb (Space)', 'Rest on Spacebar'))
-            finger_code, finger_name, finger_hint = info
-
-            # Row 5: Finger Guide Banner
-            now = time.time()
-            if now - last_key_press_time < 1.3 and last_pressed_char is not None:
-                if last_press_was_correct:
-                    p_info = KEY_FINGER_MAP.get(last_pressed_char, ('THUMB', 'Thumb', ''))
-                    disp_key = repr_ch(last_pressed_char)
-                    banner = f"✅ Key: [ {disp_key} ] ➔ {p_info[1].upper()}  |  {p_info[2]}"
-                    banner_attr = curses.A_BOLD | c_green
-                else:
-                    wrong_info = KEY_FINGER_MAP.get(last_pressed_char, ('?', 'Unknown', ''))
-                    disp_wrong = repr_ch(last_pressed_char)
-                    disp_target = repr_ch(active_ch)
-                    banner = f"❌ Pressed [ {disp_wrong} ] ({wrong_info[1]}) ➔ Target is [ {disp_target} ] ({finger_name})"
-                    banner_attr = curses.A_BOLD | c_red
             else:
-                disp_target = repr_ch(active_ch)
-                banner = f"👉 Target Key: [ {disp_target} ] ➔ {finger_name.upper()}  |  {finger_hint}"
-                banner_attr = curses.A_BOLD | c_highlight
+                active_ch = None  # Drill completed
 
-            ban_x = max(2, (max_x - len(banner)) // 2)
-            safe_addstr(stdscr, 5, ban_x, banner, banner_attr)
-            safe_addstr(stdscr, 6, 2, "─" * (max_x - 4), c_faded)
+            now = time.time()
+            press_elapsed = now - last_key_press_time
 
-            # Rows 7..11: Centered Keyboard Layout (5 rows)
-            kb_x = max(2, (max_x - 59) // 2)
-            base_target = get_base_key(active_ch)
-            shift_needed = needs_shift(active_ch)
-            side = finger_side(active_ch)
+            # Prospective Instruction Banner (Always tells the user what key & finger to use)
+            banner_text, banner_style = get_tutor_instruction(
+                active_ch, last_pressed_char, last_press_was_correct, press_elapsed, bool(target), last_target_mistyped
+            )
+            attr_map = {
+                "red": c_red | curses.A_BOLD,
+                "green": c_green | curses.A_BOLD,
+                "highlight": c_highlight | curses.A_BOLD,
+                "yellow": c_yellow | curses.A_BOLD,
+                "cyan": c_cyan | curses.A_BOLD
+            }
+            banner_attr = attr_map.get(banner_style, c_highlight | curses.A_BOLD)
+            ban_x = max(2, (max_x - len(banner_text)) // 2)
+            safe_addstr(stdscr, row_banner, ban_x, banner_text, banner_attr)
 
-            for r_idx, (indent, row_keys) in enumerate(KEYBOARD_LAYOUT):
-                ky = 7 + r_idx
-                kx = kb_x + indent
+            # Divider before keyboard
+            safe_addstr(stdscr, row_divider, 2, "─" * (max_x - 4), c_faded)
+
+            # Centered Keyboard Layout (5 rows, 60 cols)
+            kb_x = max(2, (max_x - 60) // 2)
+            base_target = get_base_key(active_ch) if active_ch else None
+            shift_needed = needs_shift(active_ch) if active_ch else False
+            side = finger_side(active_ch) if active_ch else "LEFT"
+
+            for r_idx, row_keys in enumerate(KEYBOARD_LAYOUT):
+                ky = row_keyboard + r_idx
+                kx = kb_x
                 for key_id, k_finger, label in row_keys:
-                    is_target = (key_id == base_target)
+                    is_target = (base_target is not None and key_id == base_target)
                     is_shift = shift_needed and (
                         (key_id == "Shift_L" and side == "RIGHT") or
                         (key_id == "Shift_R" and side == "LEFT")
                     )
                     is_error = (
                         not last_press_was_correct and
-                        (now - last_key_press_time < 1.3) and
+                        (press_elapsed < 1.5) and
                         last_pressed_char is not None and
                         get_base_key(last_pressed_char) == key_id
                     )
@@ -973,39 +1037,23 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
                     safe_addstr(stdscr, ky, kx, label, k_attr)
                     kx += len(label) + 1
 
-            # Rows 13+: Hand Diagram (Full / Compact / Minimal)
-            hands_y = 13
-            available_rows = (max_y - 2) - hands_y
-            active_ranges = FINGER_RANGES.get(finger_code, [])
+            # Hand Diagram (9 rows, 60 cols, perfectly aligned with keyboard)
+            hx = kb_x
+            finger_info = KEY_FINGER_MAP.get(active_ch, ('THUMB', 'Thumb', '')) if active_ch else ('THUMB', '', '')
+            active_finger_code = finger_info[0]
+            active_ranges = list(FINGER_RANGES.get(active_finger_code, []))
+            if shift_needed:
+                shift_finger = "RP" if side == "LEFT" else "LP"
+                active_ranges.extend(FINGER_RANGES.get(shift_finger, []))
 
-            if available_rows >= 11:
-                # Full 11-line ASCII art hands
-                hx = max(2, (max_x - 60) // 2)
-                for line_idx, line in enumerate(HAND_LINES):
-                    hy = hands_y + line_idx
-                    for col_idx, ch in enumerate(line):
-                        in_active = any(s <= col_idx < e for s, e in active_ranges)
-                        if in_active and ch != " ":
-                            safe_addstr(stdscr, hy, hx + col_idx, ch, c_green | curses.A_BOLD)
-                        else:
-                            safe_addstr(stdscr, hy, hx + col_idx, ch, c_faded)
-
-            elif available_rows >= 4:
-                # Compact 4-line hands diagram
-                hx = max(2, (max_x - 60) // 2)
-                for line_idx, line in enumerate(COMPACT_HAND_LINES):
-                    hy = hands_y + line_idx
-                    for col_idx, ch in enumerate(line):
-                        in_active = any(s <= col_idx < e for s, e in active_ranges)
-                        if in_active and ch != " ":
-                            safe_addstr(stdscr, hy, hx + col_idx, ch, c_green | curses.A_BOLD)
-                        else:
-                            safe_addstr(stdscr, hy, hx + col_idx, ch, c_faded)
-
-            elif available_rows >= 1:
-                # Minimal 1-line finger bar
-                min_bar = f"FINGER: [ {finger_name.upper()} ]  ({finger_hint})"
-                safe_addstr(stdscr, hands_y, max(2, (max_x - len(min_bar)) // 2), min_bar, c_green | curses.A_BOLD)
+            for line_idx, line in enumerate(HAND_LINES):
+                hy = row_hands + line_idx
+                for col_idx, ch in enumerate(line):
+                    in_active = any(s <= col_idx < e for s, e in active_ranges)
+                    if in_active and ch != " " and line_idx < 7:
+                        safe_addstr(stdscr, hy, hx + col_idx, ch, c_green | curses.A_BOLD)
+                    else:
+                        safe_addstr(stdscr, hy, hx + col_idx, ch, c_faded)
 
             # Completion Card (if drill completed)
             if engine.completed:
@@ -1069,11 +1117,12 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
                             elif action == "TUTOR":
                                 engine.switch_mode("TUTOR")
                             break
-                elif my == 2 and engine.mode == "TUTOR" and (bstate & (curses.BUTTON1_CLICKED | curses.BUTTON1_PRESSED | curses.BUTTON1_RELEASED)):
+                elif my == drill_button_row and engine.mode == "TUTOR" and (bstate & (curses.BUTTON1_CLICKED | curses.BUTTON1_PRESSED | curses.BUTTON1_RELEASED)):
                     bx1, bx2 = drill_button_bounds
                     if bx1 <= mx <= bx2:
                         engine.next_drill()
                         last_pressed_char = None
+                        last_target_mistyped = None
             except curses.error:
                 pass
             continue
@@ -1093,20 +1142,25 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
         elif ch in (18, 263, curses.KEY_F5):  # Ctrl+R or F5 -> Reset
             engine.reset()
             last_pressed_char = None
+            last_target_mistyped = None
         elif ch in (curses.KEY_BACKSPACE, 127, 8, ord('\b')):
             engine.backspace()
             last_pressed_char = None
+            last_target_mistyped = None
+            last_press_was_correct = True
         elif ch in (10, 13, curses.KEY_ENTER):
             if engine.mode == "TUTOR":
                 if engine.completed or not engine.target_text:
                     engine.next_drill()
                     last_pressed_char = None
+                    last_target_mistyped = None
             elif engine.completed:
                 engine.reset()
         elif ch == curses.KEY_F2:
             if engine.mode == "TUTOR":
                 engine.next_drill()
                 last_pressed_char = None
+                last_target_mistyped = None
         elif 32 <= ch <= 126:  # Printable ASCII characters (INCLUDING SPACE 32!)
             pressed_char = chr(ch)
             last_pressed_char = pressed_char
@@ -1117,12 +1171,15 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
                     # Free Key Explorer
                     engine.total_keystrokes += 1
                     last_press_was_correct = True
+                    last_target_mistyped = None
                 else:
                     if curr_idx < len(engine.target_text):
                         if pressed_char == engine.target_text[curr_idx]:
                             last_press_was_correct = True
+                            last_target_mistyped = None
                         else:
                             last_press_was_correct = False
+                            last_target_mistyped = engine.target_text[curr_idx]
                         engine.add_char(pressed_char)
             else:
                 engine.add_char(pressed_char)
