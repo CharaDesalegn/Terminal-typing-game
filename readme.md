@@ -11,6 +11,7 @@ A lightweight, responsive, and distraction-free terminal typing speed and practi
 * **✨ High-Contrast Color Palette:**
   * **Vibrant Bold Neon Green:** Correct letters.
   * **Vivid Bold Red:** Mistyped letters.
+  * **Prominent Reverse Gold:** Current active letter being typed.
   * **Crisp Bold Light Slate Gray:** Upcoming letters (always clearly readable, never muddy or invisible).
 * **🖥️ Centered Canvas:** Layout maintains consistent orientation and automatically centers both horizontally and vertically across all screen sizes.
 
@@ -66,7 +67,7 @@ A lightweight, responsive, and distraction-free terminal typing speed and practi
 ## ⌨️ Controls & Precision
 
 * **Character Precision:** Space is treated like any regular key—it never skips words. When pressed correctly, it lights up in vibrant green (`␣`).
-* **Color Feedback:** Correct letters and spaces are **Green (`␣`)**, mistyped letters are **Red (underlined)**, and upcoming letters are **Light Slate Gray**.
+* **Color Feedback:** Correct letters and spaces are **Green (`␣`)**, current letter is **Prominently Highlighted (Reverse Gold)**, mistyped letters are **Red (underlined)**, and upcoming letters are **Light Slate Gray**.
 * **Backspace:** Delete any typos and fix characters on the fly.
 * **`Ctrl + R` / `F5`:** Reset current session.
 * **`ESC` or `Ctrl + C`:** Quit and view your summary stats card.

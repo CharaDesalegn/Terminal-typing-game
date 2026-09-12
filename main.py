@@ -823,20 +823,26 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
                     else:
                         col = c_red
                         guide_char = typed_ch if typed_ch != ' ' else '_'
+                    guide_attr = col | curses.A_BOLD
+                    glyph_attr = col | curses.A_BOLD
                 elif char_pos == letter_in_word:
-                    col = c_white
+                    col = c_highlight
                     guide_char = ch if not is_space_active else '␣'
+                    guide_attr = curses.A_REVERSE | c_highlight | curses.A_BOLD
+                    glyph_attr = c_highlight | curses.A_BOLD
                     cursor_screen_x = draw_x + (gw // 2)
                     cursor_screen_y = word_start_y + 1
                 else:
                     col = c_faded
                     guide_char = ch
+                    guide_attr = col | curses.A_BOLD
+                    glyph_attr = col | curses.A_BOLD
 
                 guide_str = guide_char.center(gw)
                 if draw_x < max_x - 2:
-                    safe_addstr(stdscr, word_start_y, draw_x, guide_str, col | curses.A_BOLD)
-                    safe_addstr(stdscr, word_start_y + 1, draw_x, g[0].ljust(gw), col | curses.A_BOLD)
-                    safe_addstr(stdscr, word_start_y + 2, draw_x, g[1].ljust(gw), col | curses.A_BOLD)
+                    safe_addstr(stdscr, word_start_y, draw_x, guide_str, guide_attr)
+                    safe_addstr(stdscr, word_start_y + 1, draw_x, g[0].ljust(gw), glyph_attr)
+                    safe_addstr(stdscr, word_start_y + 2, draw_x, g[1].ljust(gw), glyph_attr)
 
                 draw_x += gw + 1
 
@@ -884,12 +890,15 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
                             safe_addstr(stdscr, screen_y, screen_x, "_", c_red | curses.A_REVERSE)
                         else:
                             safe_addstr(stdscr, screen_y, screen_x, typed_ch, c_red | curses.A_UNDERLINE)
+                elif i == curr_idx:
+                    # Current letter being typed: prominently highlighted!
+                    disp_ch = "␣" if target_ch == ' ' else target_ch
+                    safe_addstr(stdscr, screen_y, screen_x, disp_ch, curses.A_REVERSE | c_highlight | curses.A_BOLD)
                 elif word_start <= i < word_end:
-                    if is_space_active and target_ch == ' ':
-                        safe_addstr(stdscr, screen_y, screen_x, "␣", c_white | curses.A_REVERSE)
-                    else:
-                        safe_addstr(stdscr, screen_y, screen_x, target_ch, c_white)
+                    # Rest of active word: bright bold white so upcoming letters stand out
+                    safe_addstr(stdscr, screen_y, screen_x, target_ch, c_white)
                 else:
+                    # Upcoming future words: crisp faded gray
                     safe_addstr(stdscr, screen_y, screen_x, target_ch, c_faded)
 
             # Completion Card (Sprint Mode)
