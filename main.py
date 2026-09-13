@@ -15,12 +15,16 @@ Features:
     * All other words: arbitrary clean vocabulary
 - Mode 3 (Tutor): Interactive touch typing tutor with full QWERTY keyboard layout, faded hand &
   finger positions, real-time key-to-finger guidance, and interactive key exploration.
-- Interactive Top Bar: Clickable via mouse and selectable with keys [1], [2], [3], or [TAB].
-- CLI Flags: --sprint (-1), --endless (-2), --tutor (-3), or custom practice text.
+- Mode 4 (Error Board): Track every mistyped letter (e.g., typing E instead of D), with
+  comprehensive confusion matrix, finger analysis, all-time vs session stats, and weak-key drills.
+- Interactive Top Bar: Clickable via mouse and selectable with keys [1], [2], [3], [4], or [TAB].
+- CLI Flags: --sprint (-1), --endless (-2), --tutor (-3), --board (-4), or custom practice text.
 """
 
+import os
 import sys
 import time
+import json
 import random
 import argparse
 import curses
@@ -435,6 +439,128 @@ FINGER_RANGES = {
 }
 
 # ==============================================================================
+# MODE 4 (ERROR BOARD): MISTAKE TRACKER & CONFUSION MATRIX
+# ==============================================================================
+
+class MistakeTracker:
+    def __init__(self, filepath=None):
+        if filepath is None:
+            config_dir = os.path.expanduser("~/.config/ttyping")
+            self.filepath = os.path.join(config_dir, "mistakes.json")
+        else:
+            self.filepath = filepath
+        self.all_time = {}   # {target_ch: {"correct": int, "mistypes": {wrong_ch: count}}}
+        self.session = {}    # {target_ch: {"correct": int, "mistypes": {wrong_ch: count}}}
+        self.load()
+
+    def record(self, target_ch, typed_ch):
+        if not target_ch or not typed_ch:
+            return
+        is_correct = (target_ch == typed_ch)
+        for store in (self.all_time, self.session):
+            if target_ch not in store:
+                store[target_ch] = {"correct": 0, "mistypes": {}}
+            if is_correct:
+                store[target_ch]["correct"] += 1
+            else:
+                wrong_dict = store[target_ch]["mistypes"]
+                wrong_dict[typed_ch] = wrong_dict.get(typed_ch, 0) + 1
+        if not is_correct:
+            self.save()
+
+    def load(self):
+        try:
+            if os.path.exists(self.filepath):
+                with open(self.filepath, "r", encoding="utf-8") as f:
+                    self.all_time = json.load(f)
+        except Exception:
+            self.all_time = {}
+
+    def save(self):
+        try:
+            os.makedirs(os.path.dirname(self.filepath), exist_ok=True)
+            with open(self.filepath, "w", encoding="utf-8") as f:
+                json.dump(self.all_time, f, indent=2, ensure_ascii=False)
+        except Exception:
+            pass
+
+    def clear(self, all_time=True):
+        self.session = {}
+        if all_time:
+            self.all_time = {}
+            self.save()
+
+    def get_summary_list(self, session_only=False):
+        store = self.session if session_only else self.all_time
+        entries = []
+        for target_ch, data in store.items():
+            mistypes = data.get("mistypes", {})
+            total_errors = sum(mistypes.values())
+            if total_errors == 0:
+                continue
+            correct = data.get("correct", 0)
+            total_attempts = correct + total_errors
+            accuracy = (correct / total_attempts * 100.0) if total_attempts > 0 else 0.0
+
+            sorted_mistypes = dict(sorted(mistypes.items(), key=lambda item: item[1], reverse=True))
+            most_common = next(iter(sorted_mistypes.keys())) if sorted_mistypes else None
+            diagnosis = self.diagnose_confusion(target_ch, most_common)
+
+            entries.append({
+                "target": target_ch,
+                "total_errors": total_errors,
+                "correct": correct,
+                "accuracy": round(accuracy, 1),
+                "mistypes": sorted_mistypes,
+                "most_common_wrong": most_common,
+                "diagnosis": diagnosis
+            })
+
+        entries.sort(key=lambda x: x["total_errors"], reverse=True)
+        return entries
+
+    def get_totals(self, session_only=False):
+        store = self.session if session_only else self.all_time
+        total_errors = 0
+        total_correct = 0
+        for data in store.values():
+            total_correct += data.get("correct", 0)
+            total_errors += sum(data.get("mistypes", {}).values())
+        total_keystrokes = total_correct + total_errors
+        accuracy = (total_correct / total_keystrokes * 100.0) if total_keystrokes > 0 else 100.0
+        return total_errors, total_correct, round(accuracy, 1)
+
+    def diagnose_confusion(self, target_ch, wrong_ch):
+        if not target_ch or not wrong_ch:
+            return ""
+        t_info = KEY_FINGER_MAP.get(target_ch)
+        w_info = KEY_FINGER_MAP.get(wrong_ch)
+        if not t_info or not w_info:
+            return f"Mistyped as [{repr_ch(wrong_ch)}]"
+        t_code, t_name, _ = t_info
+        w_code, w_name, _ = w_info
+        if t_code == w_code:
+            return f"Same finger ({t_name})! Reached off-target"
+        elif t_code[0] == w_code[0]:
+            return f"Same hand: {t_name} slipped to {w_name}"
+        else:
+            return f"Wrong hand: expected {t_name}, pressed {w_name}"
+
+    def generate_practice_words(self, count=25, session_only=False):
+        entries = self.get_summary_list(session_only=session_only)
+        if not entries:
+            return None
+        weak_letters = [e["target"].lower() for e in entries[:5] if e["target"].isalpha()]
+        if not weak_letters:
+            return None
+        matched_words = [w for w in BASE_WORDS_POOL if any(ch in w.lower() for ch in weak_letters)]
+        if not matched_words:
+            matched_words = BASE_WORDS_POOL
+        selected = random.choices(matched_words, k=count)
+        return " ".join(selected)
+
+
+# ==============================================================================
 # TYPING ENGINE
 # ==============================================================================
 
@@ -444,6 +570,7 @@ class TypingEngine:
         self.custom_text = custom_text
         self.endless_word_counter = 0
         self.tutor_drill_idx = 0
+        self.tracker = MistakeTracker()
         self.reset()
 
     def _generate_endless_word(self, index):
@@ -480,6 +607,8 @@ class TypingEngine:
         elif self.mode == "TUTOR":
             drill = TUTOR_DRILLS[self.tutor_drill_idx]
             self.target_text = drill["text"]
+        elif self.mode == "BOARD":
+            self.target_text = ""
         else:
             self.target_text = ""
 
@@ -492,7 +621,8 @@ class TypingEngine:
     def switch_mode(self, new_mode):
         if self.mode != new_mode:
             self.mode = new_mode
-            self.custom_text = None
+            if new_mode != "BOARD":
+                self.custom_text = None
             self.reset()
 
     def next_drill(self):
@@ -509,6 +639,12 @@ class TypingEngine:
             self.start_time = time.time()
 
         self.total_keystrokes += 1
+
+        curr_idx = len(self.typed_chars)
+        if self.target_text and curr_idx < len(self.target_text):
+            target_ch = self.target_text[curr_idx]
+            self.tracker.record(target_ch, char)
+
         self.typed_chars.append(char)
 
         if self.mode == "ENDLESS":
@@ -691,6 +827,13 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
     drill_button_bounds = (0, 0)
     drill_button_row = 2
 
+    # Mode 4 (Error Board) state
+    board_session_only = False
+    board_scroll = 0
+    board_notice = None
+    board_notice_time = 0.0
+    board_action_buttons = []
+
     while True:
         stdscr.erase()
         max_y, max_x = stdscr.getmaxyx()
@@ -716,14 +859,21 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
         target = engine.target_text
 
         # ==========================================
-        # 1. TOP BAR (Clickable with mouse, 1, 2, 3)
+        # 1. TOP BAR (Clickable with mouse, 1, 2, 3, 4)
         # ==========================================
-        btn_sprint = "[ 1: Sprint ]" if max_x < 70 else "[ 1: ⚡ Sprint ]"
-        btn_endless = "[ 2: Endless ]" if max_x < 70 else "[ 2: ♾️ Endless ]"
-        btn_tutor = "[ 3: Tutor ]" if max_x < 70 else "[ 3: 🖐️ Tutor ]"
+        if max_x < 78:
+            btn_sprint = "[ 1: Sprint ]"
+            btn_endless = "[ 2: Endless ]"
+            btn_tutor = "[ 3: Tutor ]"
+            btn_board = "[ 4: Board ]"
+        else:
+            btn_sprint = "[ 1: ⚡ Sprint ]"
+            btn_endless = "[ 2: ♾️ Endless ]"
+            btn_tutor = "[ 3: 🖐️ Tutor ]"
+            btn_board = "[ 4: 📊 Error Board ]"
 
         top_buttons = []
-        cur_btn_x = 1 if max_x < 70 else 2
+        cur_btn_x = 1 if max_x < 78 else 2
 
         # Button 1: Sprint
         is_sprint = (engine.mode == "SPRINT")
@@ -744,10 +894,17 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
         tutor_attr = (curses.A_REVERSE | c_cyan) if is_tutor else c_white
         safe_addstr(stdscr, 0, cur_btn_x, btn_tutor, tutor_attr)
         top_buttons.append((cur_btn_x, cur_btn_x + len(btn_tutor), "TUTOR"))
+        cur_btn_x += len(btn_tutor) + 1
+
+        # Button 4: Error Board
+        is_board = (engine.mode == "BOARD")
+        board_attr = (curses.A_REVERSE | c_highlight) if is_board else c_white
+        safe_addstr(stdscr, 0, cur_btn_x, btn_board, board_attr)
+        top_buttons.append((cur_btn_x, cur_btn_x + len(btn_board), "BOARD"))
 
         # Right-aligned exit button
-        exit_label = "[ESC]" if max_x < 70 else "[ESC: Exit]"
-        exit_x = max(cur_btn_x + len(btn_tutor) + 1, max_x - len(exit_label) - 1)
+        exit_label = "[ESC]" if max_x < 78 else "[ESC: Exit]"
+        exit_x = max(cur_btn_x + len(btn_board) + 1, max_x - len(exit_label) - 1)
         safe_addstr(stdscr, 0, exit_x, exit_label, c_cyan)
 
         # Header divider
@@ -905,7 +1062,10 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
             if engine.completed:
                 card_y = min(max_y - 5, text_start_y + (visible_rows * 2) + 1)
                 congrats = f"🏆 Sprint Finished! Speed: {stats['wpm']} WPM | Accuracy: {stats['accuracy']}% | Errors: {stats['mistakes']}"
-                prompt = "Press [ENTER] for next sentence, [1] / [2] / [3] to change mode, or [ESC] to quit."
+                if stats['mistakes'] > 0:
+                    prompt = "Press [4] to view Error Board, [ENTER] for next sentence, or [1/2/3] to switch mode."
+                else:
+                    prompt = "Press [ENTER] for next sentence, [1] / [2] / [3] / [4] to change mode, or [ESC] to quit."
                 safe_addstr(stdscr, card_y, 4, congrats, c_yellow)
                 safe_addstr(stdscr, card_y + 1, 4, prompt, c_white)
 
@@ -1068,27 +1228,167 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
             if engine.completed:
                 card_y = max_y - 4
                 congrats = f"🏆 Drill Finished! Speed: {stats['wpm']} WPM | Accuracy: {stats['accuracy']}%"
-                prompt = "Press [ENTER] for next drill, [1] / [2] to change mode, or [ESC] to quit."
+                if stats['mistakes'] > 0:
+                    prompt = "Press [4] to view Error Board, [ENTER] for next drill, or [1/2/3] to change mode."
+                else:
+                    prompt = "Press [ENTER] for next drill, [1] / [2] / [4] to change mode, or [ESC] to quit."
                 safe_addstr(stdscr, card_y, 4, congrats, c_yellow)
                 safe_addstr(stdscr, card_y + 1, 4, prompt, c_white)
+
+        # ==========================================
+        # MODE 4: ERROR & MISTAKE BOARD
+        # ==========================================
+        elif engine.mode == "BOARD":
+            board_action_buttons = []
+            entries = engine.tracker.get_summary_list(session_only=board_session_only)
+            tot_errs, tot_corr, ovr_acc = engine.tracker.get_totals(session_only=board_session_only)
+
+            scope_title = "CURRENT SESSION" if board_session_only else "ALL-TIME"
+            btn_scope = "[ S: Scope: Session ]" if board_session_only else "[ S: Scope: All-Time ]"
+            btn_practice = "[ P: 🎯 Practice Weak Keys ]"
+            btn_clear = "[ C: 🔄 Clear Stats ]"
+
+            row_act = 2
+            ax = 2
+            safe_addstr(stdscr, row_act, ax, btn_scope, curses.A_BOLD | c_cyan)
+            board_action_buttons.append((row_act, ax, ax + len(btn_scope), "TOGGLE_SCOPE"))
+            ax += len(btn_scope) + 2
+
+            if entries:
+                safe_addstr(stdscr, row_act, ax, btn_practice, curses.A_BOLD | c_green)
+                board_action_buttons.append((row_act, ax, ax + len(btn_practice), "PRACTICE"))
+                ax += len(btn_practice) + 2
+
+            safe_addstr(stdscr, row_act, ax, btn_clear, curses.A_BOLD | c_yellow)
+            board_action_buttons.append((row_act, ax, ax + len(btn_clear), "CLEAR"))
+
+            if board_notice and (time.time() - board_notice_time < 3.0):
+                not_x = max(ax + len(btn_clear) + 2, max_x - len(board_notice) - 2)
+                safe_addstr(stdscr, row_act, not_x, board_notice, curses.A_BOLD | c_highlight)
+
+            # Overview Stat Row
+            stat_row_y = 3
+            weakest_str = ""
+            if entries:
+                top_e = entries[0]
+                t_disp = repr_ch(top_e["target"])
+                w_disp = repr_ch(top_e["most_common_wrong"])
+                weakest_str = f"  |  ⚠️ Most Confused: [{t_disp}] ➔ typed [{w_disp}]"
+
+            summary_text = f"📊 Scope: {scope_title}  |  ❌ Total Mistakes: {tot_errs}  |  🎯 Overall Accuracy: {ovr_acc}%{weakest_str}"
+            safe_addstr(stdscr, stat_row_y, 2, summary_text[:max_x - 4], curses.A_BOLD | c_white)
+            safe_addstr(stdscr, 4, 2, "─" * (max_x - 4), c_faded)
+
+            if not entries:
+                card_y = max(6, (max_y - 12) // 2)
+                box_w = min(max_x - 8, 64)
+                bx = max(2, (max_x - box_w) // 2)
+                safe_addstr(stdscr, card_y, bx, "╭" + "─" * (box_w - 2) + "╮", c_cyan)
+                msg1 = "🎯 NO MISTAKES RECORDED YET!"
+                msg2 = f"Your typing accuracy in {scope_title.lower()} is 100%."
+                msg3 = "Start typing in Sprint [1], Endless [2], or Tutor [3] mode."
+                msg4 = "Whenever you mistype (e.g. press E instead of D), it will"
+                msg5 = "appear right here on this board with finger analysis!"
+                safe_addstr(stdscr, card_y + 1, max(bx + 1, bx + (box_w - len(msg1)) // 2), msg1, curses.A_BOLD | c_green)
+                safe_addstr(stdscr, card_y + 3, max(bx + 1, bx + (box_w - len(msg2)) // 2), msg2, c_white)
+                safe_addstr(stdscr, card_y + 4, max(bx + 1, bx + (box_w - len(msg3)) // 2), msg3, c_highlight)
+                safe_addstr(stdscr, card_y + 6, max(bx + 1, bx + (box_w - len(msg4)) // 2), msg4, c_faded)
+                safe_addstr(stdscr, card_y + 7, max(bx + 1, bx + (box_w - len(msg5)) // 2), msg5, c_faded)
+                safe_addstr(stdscr, card_y + 9, bx, "╰" + "─" * (box_w - 2) + "╯", c_cyan)
+            else:
+                th_y = 5
+                col_w_target = 8
+                col_w_errors = 8
+                col_w_mistypes = 24
+                col_w_acc = 10
+                avail_diag = max(10, max_x - (4 + col_w_target + col_w_errors + col_w_mistypes + col_w_acc + 5))
+
+                th_target = "TARGET".center(col_w_target)
+                th_errors = "ERRORS".center(col_w_errors)
+                th_mistypes = "MISTYPED WITH (COUNT)".ljust(col_w_mistypes)
+                th_acc = "ACCURACY".center(col_w_acc)
+                th_diag = "FINGER / ROOT CAUSE ANALYSIS".ljust(avail_diag)
+
+                th_line = f" {th_target}│{th_errors}│ {th_mistypes}│{th_acc}│ {th_diag}"
+                safe_addstr(stdscr, th_y, 2, th_line[:max_x - 4], curses.A_BOLD | c_highlight)
+
+                div_line = f"─{'─'*col_w_target}┼{'─'*col_w_errors}┼{'─'*(col_w_mistypes + 1)}┼{'─'*col_w_acc}┼{'─'*(avail_diag + 1)}"
+                safe_addstr(stdscr, th_y + 1, 2, div_line[:max_x - 4], c_faded)
+
+                table_start_y = th_y + 2
+                visible_table_rows = max(3, max_y - table_start_y - 3)
+
+                max_scroll = max(0, len(entries) - visible_table_rows)
+                board_scroll = min(board_scroll, max_scroll)
+
+                for r_idx in range(visible_table_rows):
+                    entry_idx = board_scroll + r_idx
+                    if entry_idx >= len(entries):
+                        break
+
+                    e = entries[entry_idx]
+                    row_y = table_start_y + r_idx
+
+                    t_disp = repr_ch(e["target"])
+                    t_str = f"[{t_disp}]".center(col_w_target)
+                    err_str = str(e["total_errors"]).center(col_w_errors)
+
+                    parts = []
+                    for w_ch, count in e["mistypes"].items():
+                        parts.append(f"'{repr_ch(w_ch)}' ({count}x)")
+                    mistypes_str = ", ".join(parts).ljust(col_w_mistypes)[:col_w_mistypes]
+
+                    acc_str = f"{e['accuracy']}%".center(col_w_acc)
+                    diag_str = e["diagnosis"].ljust(avail_diag)[:avail_diag]
+
+                    acc_val = e["accuracy"]
+                    acc_color = c_green if acc_val >= 85 else (c_yellow if acc_val >= 70 else c_red)
+
+                    rx = 2
+                    safe_addstr(stdscr, row_y, rx, f" {t_str}", curses.A_BOLD | c_highlight)
+                    rx += len(t_str) + 1
+                    safe_addstr(stdscr, row_y, rx, "│", c_faded)
+                    rx += 1
+                    safe_addstr(stdscr, row_y, rx, err_str, curses.A_BOLD | c_red)
+                    rx += len(err_str)
+                    safe_addstr(stdscr, row_y, rx, "│ ", c_faded)
+                    rx += 2
+                    safe_addstr(stdscr, row_y, rx, mistypes_str, c_yellow)
+                    rx += len(mistypes_str)
+                    safe_addstr(stdscr, row_y, rx, "│", c_faded)
+                    rx += 1
+                    safe_addstr(stdscr, row_y, rx, acc_str, curses.A_BOLD | acc_color)
+                    rx += len(acc_str)
+                    safe_addstr(stdscr, row_y, rx, "│ ", c_faded)
+                    rx += 2
+                    safe_addstr(stdscr, row_y, rx, diag_str, c_white)
+
+                if len(entries) > visible_table_rows:
+                    scroll_info = f" [▼ Showing {board_scroll + 1}-{min(len(entries), board_scroll + visible_table_rows)} of {len(entries)} (Use ↑/↓ to scroll)] "
+                    safe_addstr(stdscr, max_y - 3, max(2, (max_x - len(scroll_info)) // 2), scroll_info, c_cyan)
 
         # ==========================================
         # 4. FOOTER & SHORTCUTS
         # ==========================================
         footer_y = max_y - 2
         safe_addstr(stdscr, footer_y - 1, 2, "─" * (max_x - 4), c_faded)
-        if engine.mode == "TUTOR":
-            if max_x < 65:
-                controls = "[1/2/3] Mode  [Enter] Next Drill  [Back] Fix  [ESC] Exit"
+        if engine.mode == "BOARD":
+            if max_x < 70:
+                controls = "[1/2/3] Modes   [S] Scope   [P] Practice   [C] Clear   [ESC] Exit"
             else:
-                controls = "[1/2/3] Mode   [Enter/F2] Next Drill   [Space] Key   [Back] Fix   [Ctrl+R] Reset   [ESC] Exit"
+                controls = "[1/2/3] Modes   [S] Toggle Scope   [P] Practice Weak Keys   [C] Clear Stats   [↑/↓] Scroll   [ESC] Exit"
+        elif engine.mode == "TUTOR":
+            if max_x < 65:
+                controls = "[1/2/3/4] Mode  [Enter] Next Drill  [Back] Fix  [ESC] Exit"
+            else:
+                controls = "[1/2/3/4] Mode   [Enter/F2] Next Drill   [Space] Key   [Back] Fix   [Ctrl+R] Reset   [ESC] Exit"
         else:
             if max_x < 50:
-                controls = "[1/2/3] Mode  [Back] Fix  [ESC] Exit"
+                controls = "[1/2/3/4] Mode  [Back] Fix  [ESC] Exit"
             elif max_x < 65:
-                controls = "[1/2/3] Mode  [Back] Fix  [Ctrl+R] Reset  [ESC] Exit"
+                controls = "[1/2/3/4] Mode  [Back] Fix  [Ctrl+R] Reset  [ESC] Exit"
             else:
-                controls = "[1/2/3] Mode   [Space] Key   [Backspace] Fix   [Ctrl+R] Reset   [ESC] Exit"
+                controls = "[1/2/3/4] Mode   [Space] Key   [Backspace] Fix   [Ctrl+R] Reset   [ESC] Exit"
         if engine.completed:
             controls = "[ENTER] Next  " + controls
         safe_addstr(stdscr, footer_y, 2, controls, c_cyan)
@@ -1119,12 +1419,30 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
                 if my == 0 and (bstate & (curses.BUTTON1_CLICKED | curses.BUTTON1_PRESSED | curses.BUTTON1_RELEASED)):
                     for x_start, x_end, action in top_buttons:
                         if x_start <= mx <= x_end:
-                            if action == "SPRINT":
-                                engine.switch_mode("SPRINT")
-                            elif action == "ENDLESS":
-                                engine.switch_mode("ENDLESS")
-                            elif action == "TUTOR":
-                                engine.switch_mode("TUTOR")
+                            if action in ("SPRINT", "ENDLESS", "TUTOR", "BOARD"):
+                                engine.switch_mode(action)
+                            break
+                elif my == 2 and engine.mode == "BOARD" and (bstate & (curses.BUTTON1_CLICKED | curses.BUTTON1_PRESSED | curses.BUTTON1_RELEASED)):
+                    for btn_y, x_start, x_end, action in board_action_buttons:
+                        if x_start <= mx <= x_end:
+                            if action == "TOGGLE_SCOPE":
+                                board_session_only = not board_session_only
+                                board_scroll = 0
+                                board_notice = "Switched to " + ("Session Stats" if board_session_only else "All-Time Stats")
+                                board_notice_time = time.time()
+                            elif action == "PRACTICE":
+                                weak_words = engine.tracker.generate_practice_words(count=30, session_only=board_session_only)
+                                if weak_words:
+                                    engine.custom_text = weak_words
+                                    engine.switch_mode("SPRINT")
+                                else:
+                                    board_notice = "No weak letters recorded yet to practice!"
+                                    board_notice_time = time.time()
+                            elif action == "CLEAR":
+                                engine.tracker.clear(all_time=not board_session_only)
+                                board_notice = "Cleared " + ("Session Stats" if board_session_only else "All-Time Stats")
+                                board_notice_time = time.time()
+                                board_scroll = 0
                             break
                 elif my == drill_button_row and engine.mode == "TUTOR" and (bstate & (curses.BUTTON1_CLICKED | curses.BUTTON1_PRESSED | curses.BUTTON1_RELEASED)):
                     bx1, bx2 = drill_button_bounds
@@ -1139,14 +1457,16 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
         # Keyboard shortcuts
         if ch in (27, 3):  # ESC or Ctrl+C
             break
-        elif ch == ord('1') and (len(engine.typed_chars) == 0 or (curr_idx < len(engine.target_text) and engine.target_text[curr_idx] != '1')):
+        elif ch == ord('1') and (len(engine.typed_chars) == 0 or engine.mode == "BOARD" or (curr_idx < len(engine.target_text) and engine.target_text[curr_idx] != '1')):
             engine.switch_mode("SPRINT")
-        elif ch == ord('2') and (len(engine.typed_chars) == 0 or (curr_idx < len(engine.target_text) and engine.target_text[curr_idx] != '2')):
+        elif ch == ord('2') and (len(engine.typed_chars) == 0 or engine.mode == "BOARD" or (curr_idx < len(engine.target_text) and engine.target_text[curr_idx] != '2')):
             engine.switch_mode("ENDLESS")
-        elif ch == ord('3') and (len(engine.typed_chars) == 0 or (curr_idx < len(engine.target_text) and engine.target_text[curr_idx] != '3')):
+        elif ch == ord('3') and (len(engine.typed_chars) == 0 or engine.mode == "BOARD" or (curr_idx < len(engine.target_text) and engine.target_text[curr_idx] != '3')):
             engine.switch_mode("TUTOR")
-        elif ch == 9:  # TAB -> cycle modes SPRINT -> ENDLESS -> TUTOR -> SPRINT
-            mode_cycle = {"SPRINT": "ENDLESS", "ENDLESS": "TUTOR", "TUTOR": "SPRINT"}
+        elif ch == ord('4') and (len(engine.typed_chars) == 0 or engine.mode == "BOARD" or (curr_idx < len(engine.target_text) and engine.target_text[curr_idx] != '4')):
+            engine.switch_mode("BOARD")
+        elif ch == 9:  # TAB -> cycle modes SPRINT -> ENDLESS -> TUTOR -> BOARD -> SPRINT
+            mode_cycle = {"SPRINT": "ENDLESS", "ENDLESS": "TUTOR", "TUTOR": "BOARD", "BOARD": "SPRINT"}
             engine.switch_mode(mode_cycle.get(engine.mode, "SPRINT"))
         elif ch in (18, 263, curses.KEY_F5):  # Ctrl+R or F5 -> Reset
             engine.reset()
@@ -1170,6 +1490,43 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
                 engine.next_drill()
                 last_pressed_char = None
                 last_target_mistyped = None
+
+        # Board Mode navigation
+        if engine.mode == "BOARD":
+            if ch in (ord('s'), ord('S')):
+                board_session_only = not board_session_only
+                board_scroll = 0
+                board_notice = "Switched to " + ("Session Stats" if board_session_only else "All-Time Stats")
+                board_notice_time = time.time()
+                continue
+            elif ch in (ord('c'), ord('C')):
+                engine.tracker.clear(all_time=not board_session_only)
+                board_scroll = 0
+                board_notice = "Cleared " + ("Session Stats" if board_session_only else "All-Time Stats")
+                board_notice_time = time.time()
+                continue
+            elif ch in (ord('p'), ord('P')):
+                weak_words = engine.tracker.generate_practice_words(count=30, session_only=board_session_only)
+                if weak_words:
+                    engine.custom_text = weak_words
+                    engine.switch_mode("SPRINT")
+                else:
+                    board_notice = "No weak letters recorded yet to practice!"
+                    board_notice_time = time.time()
+                continue
+            elif ch in (curses.KEY_UP, ord('k'), ord('K')):
+                board_scroll = max(0, board_scroll - 1)
+                continue
+            elif ch in (curses.KEY_DOWN, ord('j'), ord('J')):
+                board_scroll += 1
+                continue
+            elif ch in (curses.KEY_PPAGE,):
+                board_scroll = max(0, board_scroll - 5)
+                continue
+            elif ch in (curses.KEY_NPAGE,):
+                board_scroll += 5
+                continue
+
         elif 32 <= ch <= 126:  # Printable ASCII characters (INCLUDING SPACE 32!)
             pressed_char = chr(ch)
             last_pressed_char = pressed_char
@@ -1193,12 +1550,12 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
             else:
                 engine.add_char(pressed_char)
 
-    return last_stats, engine.mode
+    return last_stats, engine.mode, engine.tracker
 
 def main():
     parser = argparse.ArgumentParser(
         prog="ttyping",
-        description="Terminal Typing Game - Sprint WPM testing, Endless practice & Touch Typing Tutor",
+        description="Terminal Typing Game - Sprint WPM testing, Endless practice, Touch Typing Tutor & Error Board",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Modes:
   1: Sprint   - Simple, natural sentences you finish in 1-2 minutes to test your WPM.
@@ -1212,17 +1569,25 @@ def main():
                 * Faded hand & finger positions (Left & Right hands)
                 * Real-time finger guidance for every key you type
                 * Free Key Explorer drill to test any key on your keyboard
+  4: Board    - Error & Mistake Board:
+                * Tracks every mistyped letter (e.g. typing E instead of D)
+                * Confusion matrix showing exactly what you press incorrectly
+                * Finger analysis and root cause diagnosis
+                * Targeted practice drills for your weakest keys
 """
     )
     parser.add_argument("-1", "--sprint", action="store_true", help="Launch directly in Sprint Mode (1-2 min WPM test)")
     parser.add_argument("-2", "--endless", action="store_true", help="Launch directly in Endless Mode (controlled practice)")
     parser.add_argument("-3", "--tutor", action="store_true", help="Launch directly in Tutor Mode (QWERTY touch typing finger guide)")
+    parser.add_argument("-4", "--board", "--errors", action="store_true", help="Launch directly in Error & Mistake Board")
     parser.add_argument("custom", nargs="*", help="Optional custom text or sentence to practice")
 
     args = parser.parse_args()
 
     mode = "SPRINT"
-    if args.tutor:
+    if args.board:
+        mode = "BOARD"
+    elif args.tutor:
         mode = "TUTOR"
     elif args.endless:
         mode = "ENDLESS"
@@ -1233,9 +1598,12 @@ def main():
 
     try:
         result = curses.wrapper(run_game, mode, custom_text)
-        final_stats, final_mode = result if result else (None, mode)
+        if result:
+            final_stats, final_mode, final_tracker = result
+        else:
+            final_stats, final_mode, final_tracker = None, mode, None
     except KeyboardInterrupt:
-        final_stats, final_mode = None, mode
+        final_stats, final_mode, final_tracker = None, mode, None
 
     # Summary
     print("\n" + "=" * 50)
@@ -1249,6 +1617,15 @@ def main():
         print(f"  🎯 Accuracy         : {final_stats['accuracy']}%")
         print(f"  ❌ Errors Made      : {final_stats['mistakes']}")
         print(f"  ⌨️  Total Keystrokes : {final_stats['keystrokes']}")
+    if final_tracker:
+        top_errs = final_tracker.get_summary_list(session_only=True)[:4]
+        if top_errs:
+            print("-" * 50)
+            print("  ⚠️  Most Mistyped Keys (This Session):")
+            for e in top_errs:
+                t_str = repr_ch(e["target"])
+                parts = [f"'{repr_ch(w)}' ({c}x)" for w, c in list(e["mistypes"].items())[:3]]
+                print(f"     • Target [{t_str}] ➔ typed: {', '.join(parts)}  ({e['diagnosis']})")
     print("=" * 50)
     print("Thanks for playing! Run 'ttyping' anytime to play again.\n")
 

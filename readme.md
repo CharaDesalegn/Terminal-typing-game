@@ -46,20 +46,38 @@ A lightweight, responsive, and distraction-free terminal typing speed and practi
   5. **🔢 Numbers & Symbols:** Number row and punctuation drills.
   6. **⌨️ Free Key Explorer:** Press ANY key on your keyboard to instantly see which finger and hand to use!
 
+### 4. 📊 Error & Mistake Board (Confusion Matrix & Analytics)
+* **Goal:** Understand your personal typing mistakes and target your weak keys for rapid improvement.
+* **🔍 Mistake Tracking:** Tracks every single mistyped character (e.g., typing `E` instead of `D`, or `R` instead of `T`).
+* **📋 Confusion Matrix Board:** Displays a clean table showing:
+  * **Target Key:** The letter you were supposed to type.
+  * **Total Errors:** How many times you've mistyped that letter.
+  * **Mistyped With (Count):** Exactly which keys your fingers accidentally hit (e.g. `'e' (3x), 's' (1x)`).
+  * **Accuracy Rate:** Precision percentage per key.
+  * **Finger & Root Cause Analysis:** Explains whether you used the same finger (reached off-target), an adjacent finger on the same hand, or the wrong hand entirely.
+* **🎯 Practice Weak Keys [P]:** Generates a custom practice session filled with words specifically containing your most mistyped letters!
+* **🔄 Scope Toggle [S]:** Switch between your current session's mistakes and all-time persistent stats saved in `~/.config/ttyping/mistakes.json`.
+* **🧹 Clear Stats [C]:** Reset your mistake history whenever you want to measure fresh progress.
+
 ---
 
 ## 🕹️ Mode Selection
 
-1. **🖱️ Mouse:** Click directly on `[ 1: ⚡ Sprint ]`, `[ 2: ♾️ Endless ]`, or `[ 3: 🖐️ Tutor ]` on the top bar.
+1. **🖱️ Mouse:** Click directly on `[ 1: ⚡ Sprint ]`, `[ 2: ♾️ Endless ]`, `[ 3: 🖐️ Tutor ]`, or `[ 4: 📊 Error Board ]` on the top bar.
 2. **⌨️ Keyboard:**
-   * **`1` / `2` / `3`:** Switch directly to Sprint, Endless, or Tutor mode.
-   * **`TAB`:** Cycle through all modes.
+   * **`1` / `2` / `3` / `4`:** Switch directly to Sprint, Endless, Tutor, or Error Board mode.
+   * **`TAB`:** Cycle through all modes (`Sprint` ➔ `Endless` ➔ `Tutor` ➔ `Board`).
    * **`ENTER` / `F2`:** Advance to the next drill in Tutor mode.
+   * **`P`:** On the Error Board, generate and launch a targeted drill for your weak letters.
+   * **`S`:** On the Error Board, toggle between Session and All-Time stats.
+   * **`C`:** On the Error Board, clear mistake statistics.
+   * **`↑` / `↓` / `PgUp` / `PgDn`:** Scroll through the mistake table.
 3. **💻 CLI Flags:**
    ```bash
    ttyping --sprint     # Launch in Sprint Mode (or: ttyping -1)
    ttyping --endless    # Launch in Endless Mode (or: ttyping -2)
    ttyping --tutor      # Launch in Touch Typing Tutor Mode (or: ttyping -3)
+   ttyping --board      # Launch directly into the Error Board (or: ttyping -4)
    ```
 
 ---
