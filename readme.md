@@ -49,29 +49,40 @@ A lightweight, responsive, and distraction-free terminal typing speed and practi
 ### 4. 📊 Error & Mistake Board (Confusion Matrix & Analytics)
 * **Goal:** Understand your personal typing mistakes and target your weak keys for rapid improvement.
 * **🔍 Mistake Tracking:** Tracks every single mistyped character (e.g., typing `E` instead of `D`, or `R` instead of `T`).
-* **📋 Confusion Matrix Board:** Displays a clean table showing:
+* **🔑 Interactive Single-Key Inspection:**
+  * **Press ANY key (e.g. `[D]` or `[E]`)** or click any row on the board to inspect that specific key's error card.
+  * Displays the target key, proper finger and position hint, exact mistyped characters with error counts, and finger diagnosis.
+* **🎯 High-Density Focused Practice Mode:**
+  * While inspecting any key, press **`[ENTER]`** (or click the practice button) to enter a focused drill where words are heavily saturated with that letter (including words with 2, 3, or more occurrences of that target key).
+  * Prominent target drill banner displayed throughout practice.
+  * Hitting **`[ENTER]`** upon drill completion immediately serves a fresh set of high-density practice words for that same key!
+* **📋 Confusion Matrix Overview:** Displays an overview table showing:
   * **Target Key:** The letter you were supposed to type.
   * **Total Errors:** How many times you've mistyped that letter.
   * **Mistyped With (Count):** Exactly which keys your fingers accidentally hit (e.g. `'e' (3x), 's' (1x)`).
   * **Accuracy Rate:** Precision percentage per key.
   * **Finger & Root Cause Analysis:** Explains whether you used the same finger (reached off-target), an adjacent finger on the same hand, or the wrong hand entirely.
-* **🎯 Practice Weak Keys [P]:** Generates a custom practice session filled with words specifically containing your most mistyped letters!
-* **🔄 Scope Toggle [S]:** Switch between your current session's mistakes and all-time persistent stats saved in `~/.config/ttyping/mistakes.json`.
-* **🧹 Clear Stats [C]:** Reset your mistake history whenever you want to measure fresh progress.
+* **🎯 Practice Weak Keys [ENTER / F2]:** Generates a custom practice session filled with words specifically containing your most mistyped letters!
+* **🔄 Scope Toggle [F1 / TAB]:** Switch between your current session's mistakes and all-time persistent stats saved in `~/.config/ttyping/mistakes.json`.
+* **🧹 Clear Stats [F3]:** Reset your mistake history whenever you want to measure fresh progress.
 
 ---
 
 ## 🕹️ Mode Selection
 
-1. **🖱️ Mouse:** Click directly on `[ 1: ⚡ Sprint ]`, `[ 2: ♾️ Endless ]`, `[ 3: 🖐️ Tutor ]`, or `[ 4: 📊 Error Board ]` on the top bar.
+1. **🖱️ Mouse:** Click directly on `[ 1: ⚡ Sprint ]`, `[ 2: ♾️ Endless ]`, `[ 3: 🖐️ Tutor ]`, or `[ 4: 📊 Error Board ]` on the top bar, or click any table row / action button on the Board.
 2. **⌨️ Keyboard:**
    * **`1` / `2` / `3` / `4`:** Switch directly to Sprint, Endless, Tutor, or Error Board mode.
    * **`TAB`:** Cycle through all modes (`Sprint` ➔ `Endless` ➔ `Tutor` ➔ `Board`).
-   * **`ENTER` / `F2`:** Advance to the next drill in Tutor mode.
-   * **`P`:** On the Error Board, generate and launch a targeted drill for your weak letters.
-   * **`S`:** On the Error Board, toggle between Session and All-Time stats.
-   * **`C`:** On the Error Board, clear mistake statistics.
-   * **`↑` / `↓` / `PgUp` / `PgDn`:** Scroll through the mistake table.
+   * **`ENTER` / `F2`:** Advance to next drill in Tutor mode.
+   * **On Error Board:**
+     * **Press ANY key (e.g. `D`, `E`, `S`):** Inspect errors and diagnosis for that specific key.
+     * **`ENTER`:** Practice words densely packed with the inspected key (or practice top weak keys if none inspected).
+     * **`Backspace` / `ESC`:** Close key inspection and return to full table.
+     * **`F1` / `TAB`:** Toggle between Session and All-Time stats.
+     * **`F2`:** Practice top weak keys drill.
+     * **`F3` / `Delete`:** Clear mistake statistics.
+     * **`↑` / `↓` / `PgUp` / `PgDn`:** Scroll through the mistake table.
 3. **💻 CLI Flags:**
    ```bash
    ttyping --sprint     # Launch in Sprint Mode (or: ttyping -1)
