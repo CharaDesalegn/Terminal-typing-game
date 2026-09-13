@@ -49,11 +49,12 @@ A lightweight, responsive, and distraction-free terminal typing speed and practi
 ### 4. 📊 Error & Mistake Board (Confusion Matrix & Analytics)
 * **Goal:** Understand your personal typing mistakes and target your weak keys for rapid improvement.
 * **🔍 Mistake Tracking:** Tracks every single mistyped character (e.g., typing `E` instead of `D`, or `R` instead of `T`).
-* **🔑 Interactive Single-Key Inspection:**
-  * **Press ANY key (e.g. `[D]` or `[E]`)** or click any row on the board to inspect that specific key's error card.
-  * Displays the target key, proper finger and position hint, exact mistyped characters with error counts, and finger diagnosis.
-* **🎯 High-Density Focused Practice Mode:**
+* **🔑 Interactive Single-Key Inspection (Pinned to Top):**
+  * **Press ANY key (e.g. `[D]`, `[E]`, `[R]`)** or click any row on the board: that key's error analysis immediately moves directly to the **very top of the Error Board and top of the table** so you can check it instantly.
+  * Displays the target key, proper finger and position hint, exact mistyped characters with error counts, accuracy percentage, and root-cause finger diagnosis.
+* **🎯 High-Density Focused Practice Mode (Error Board Protected):**
   * While inspecting any key, press **`[ENTER]`** (or click the practice button) to enter a focused drill where words are heavily saturated with that letter (including words with 2, 3, or more occurrences of that target key).
+  * **Protected Stats:** Errors made during focused key practice drills are **not added to the Error Board**, keeping your real-world typing metrics pure and uninflated.
   * Prominent target drill banner displayed throughout practice.
   * Hitting **`[ENTER]`** upon drill completion immediately serves a fresh set of high-density practice words for that same key!
 * **📋 Confusion Matrix Overview:** Displays an overview table showing:

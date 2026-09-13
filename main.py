@@ -655,6 +655,7 @@ class TypingEngine:
         self.mode = mode
         self.custom_text = custom_text
         self.practice_target_key = None
+        self.is_practice_drill = False
         self.endless_word_counter = 0
         self.tutor_drill_idx = 0
         self.tracker = MistakeTracker()
@@ -711,6 +712,7 @@ class TypingEngine:
             if not keep_custom and new_mode != "BOARD":
                 self.custom_text = None
                 self.practice_target_key = None
+                self.is_practice_drill = False
             self.reset()
 
     def next_drill(self):
@@ -731,7 +733,9 @@ class TypingEngine:
         curr_idx = len(self.typed_chars)
         if self.target_text and curr_idx < len(self.target_text):
             target_ch = self.target_text[curr_idx]
-            self.tracker.record(target_ch, char)
+            # Key requirement: When practicing a specific key (or in drill mode), mistakes are NOT added to the Error Board!
+            if not self.practice_target_key and not self.is_practice_drill:
+                self.tracker.record(target_ch, char)
 
         self.typed_chars.append(char)
 
@@ -1345,6 +1349,26 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
             entries = engine.tracker.get_summary_list(session_only=board_session_only)
             tot_errs, tot_corr, ovr_acc = engine.tracker.get_totals(session_only=board_session_only)
 
+            # When a key is inspected (e.g. user pressed 'e'), ensure that key's error is placed at the very top!
+            if board_inspected_key is not None:
+                target_k = board_inspected_key.lower()
+                found_idx = next((i for i, e in enumerate(entries) if e["target"].lower() == target_k), None)
+                if found_idx is not None:
+                    inspected_entry = entries.pop(found_idx)
+                    entries.insert(0, inspected_entry)
+                else:
+                    detail_entry = engine.tracker.get_key_detail(board_inspected_key, session_only=board_session_only)
+                    inspected_entry = {
+                        "target": board_inspected_key,
+                        "total_errors": detail_entry["total_errors"],
+                        "correct": detail_entry["correct"],
+                        "accuracy": detail_entry["accuracy"],
+                        "mistypes": detail_entry["mistypes"],
+                        "most_common_wrong": detail_entry["most_common_wrong"],
+                        "diagnosis": detail_entry["diagnosis"]
+                    }
+                    entries.insert(0, inspected_entry)
+
             scope_title = "CURRENT SESSION" if board_session_only else "ALL-TIME"
             btn_scope = "[ F1: Scope: Session ]" if board_session_only else "[ F1: Scope: All-Time ]"
             btn_practice = "[ F2: 🎯 Practice Weak Keys ]"
@@ -1370,15 +1394,25 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
 
             # Overview Stat Row
             stat_row_y = 3
-            weakest_str = ""
-            if entries:
-                top_e = entries[0]
-                t_disp = repr_ch(top_e["target"])
-                w_disp = repr_ch(top_e["most_common_wrong"])
-                weakest_str = f"  |  ⚠️ Most Confused: [{t_disp}] ➔ typed [{w_disp}]"
+            if board_inspected_key is not None:
+                detail_top = engine.tracker.get_key_detail(board_inspected_key, session_only=board_session_only)
+                tk_name = repr_ch(board_inspected_key).upper()
+                f_name = detail_top["finger_info"][1]
+                if detail_top["total_errors"] > 0:
+                    summary_text = f"🔍 KEY [ {tk_name} ] ({f_name}): ❌ {detail_top['total_errors']} errors  |  🎯 {detail_top['accuracy']}% acc  |  ⚠️ Typed as: '{repr_ch(detail_top['most_common_wrong'])}'  |  Total Mistakes: {tot_errs}"
+                else:
+                    summary_text = f"🔍 KEY [ {tk_name} ] ({f_name}): ✅ 0 errors (100% accuracy)  |  Total Mistakes in {scope_title}: {tot_errs}"
+                safe_addstr(stdscr, stat_row_y, 2, summary_text[:max_x - 4], curses.A_BOLD | c_highlight)
+            else:
+                weakest_str = ""
+                if entries:
+                    top_e = entries[0]
+                    t_disp = repr_ch(top_e["target"])
+                    w_disp = repr_ch(top_e["most_common_wrong"]) if top_e.get("most_common_wrong") else "none"
+                    weakest_str = f"  |  ⚠️ Most Confused: [{t_disp}] ➔ typed [{w_disp}]"
 
-            summary_text = f"📊 Scope: {scope_title}  |  ❌ Total Mistakes: {tot_errs}  |  🎯 Overall Accuracy: {ovr_acc}%{weakest_str}"
-            safe_addstr(stdscr, stat_row_y, 2, summary_text[:max_x - 4], curses.A_BOLD | c_white)
+                summary_text = f"📊 Scope: {scope_title}  |  ❌ Total Mistakes: {tot_errs}  |  🎯 Overall Accuracy: {ovr_acc}%{weakest_str}"
+                safe_addstr(stdscr, stat_row_y, 2, summary_text[:max_x - 4], curses.A_BOLD | c_white)
             safe_addstr(stdscr, 4, 2, "─" * (max_x - 4), c_faded)
 
             # Key Inspection Card (if a key is inspected)
@@ -1529,7 +1563,10 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
                         parts = []
                         for w_ch, count in e["mistypes"].items():
                             parts.append(f"'{repr_ch(w_ch)}' ({count}x)")
-                        mistypes_str = ", ".join(parts).ljust(col_w_mistypes)[:col_w_mistypes]
+                        if parts:
+                            mistypes_str = ", ".join(parts).ljust(col_w_mistypes)[:col_w_mistypes]
+                        else:
+                            mistypes_str = "(clean: 0 errors)".ljust(col_w_mistypes)[:col_w_mistypes]
 
                         acc_str = f"{e['accuracy']}%".center(col_w_acc)
                         diag_str = e["diagnosis"].ljust(avail_diag)[:avail_diag]
@@ -1649,14 +1686,17 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
                                     words = engine.tracker.generate_words_for_single_key(board_inspected_key, count=25)
                                     engine.custom_text = words
                                     engine.practice_target_key = board_inspected_key
+                                    engine.is_practice_drill = True
                                     engine.switch_mode("SPRINT", keep_custom=True)
                             elif action == "CLOSE_INSPECTION":
                                 board_inspected_key = None
+                                board_scroll = 0
                             break
                     if not handled_btn:
                         for r_y, t_ch in board_table_rows_meta:
                             if my == r_y:
                                 board_inspected_key = t_ch
+                                board_scroll = 0
                                 break
                 elif my == drill_button_row and engine.mode == "TUTOR" and (bstate & (curses.BUTTON1_CLICKED | curses.BUTTON1_PRESSED | curses.BUTTON1_RELEASED)):
                     bx1, bx2 = drill_button_bounds
@@ -1672,6 +1712,7 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
         if ch in (27, 3):  # ESC or Ctrl+C
             if ch == 27 and engine.mode == "BOARD" and board_inspected_key is not None:
                 board_inspected_key = None
+                board_scroll = 0
                 continue
             break
         elif ch == ord('1') and (len(engine.typed_chars) == 0 or engine.mode == "BOARD" or (curr_idx < len(engine.target_text) and engine.target_text[curr_idx] != '1')):
@@ -1692,6 +1733,7 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
         elif ch in (curses.KEY_BACKSPACE, 127, 8, ord('\b')):
             if engine.mode == "BOARD" and board_inspected_key is not None:
                 board_inspected_key = None
+                board_scroll = 0
                 continue
             engine.backspace()
             last_pressed_char = None
@@ -1703,6 +1745,7 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
                     words = engine.tracker.generate_words_for_single_key(board_inspected_key, count=25)
                     engine.custom_text = words
                     engine.practice_target_key = board_inspected_key
+                    engine.is_practice_drill = True
                     engine.switch_mode("SPRINT", keep_custom=True)
                     continue
                 else:
@@ -1710,6 +1753,7 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
                     if weak_words:
                         engine.custom_text = weak_words
                         engine.practice_target_key = None
+                        engine.is_practice_drill = True
                         engine.switch_mode("SPRINT", keep_custom=True)
                         continue
                     else:
@@ -1724,6 +1768,7 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
             elif engine.completed:
                 if engine.practice_target_key:
                     engine.custom_text = engine.tracker.generate_words_for_single_key(engine.practice_target_key, count=25)
+                    engine.is_practice_drill = True
                     engine.reset()
                 else:
                     engine.reset()
@@ -1746,6 +1791,7 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
                 if weak_words:
                     engine.custom_text = weak_words
                     engine.practice_target_key = None
+                    engine.is_practice_drill = True
                     engine.switch_mode("SPRINT", keep_custom=True)
                 else:
                     board_notice = "No weak letters recorded yet to practice!"
@@ -1769,9 +1815,10 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
             pressed_char = chr(ch)
 
             if engine.mode == "BOARD":
-                # User pressed a key on the Error Board: inspect that specific key!
+                # User pressed a key on the Error Board: inspect that specific key and place it at the top!
                 inspected = pressed_char.lower() if pressed_char.isalpha() else pressed_char
                 board_inspected_key = inspected
+                board_scroll = 0
                 board_notice = None
                 continue
 
