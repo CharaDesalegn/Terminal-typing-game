@@ -49,27 +49,26 @@ A lightweight, responsive, and distraction-free terminal typing speed and practi
 ### 4. 📊 Error & Mistake Board (Confusion Matrix & Analytics)
 * **Goal:** Understand your personal typing mistakes and target your weak keys for rapid improvement.
 * **🔍 Mistake Tracking:** Tracks every single mistyped character (e.g., typing `E` instead of `D`, or `R` instead of `T`).
-* **⌨️ Interactive Visual Keyboard & Error Heatmap:**
-  * **Full QWERTY Layout:** Renders the keyboard layout directly on the Error Board.
-  * **✨ Real-Time Keypress Highlighting:** Press ANY key on your physical keyboard (or click any key with your mouse) to see that key instantly light up in prominent reverse gold!
-  * **🟡 / 🔴 Weak-Key Heatmap:** Keys with mistypes are color-coded in yellow (1–2 errors) or vivid red (3+ errors), while clean keys glow in green.
-  * **⚠️ Confusion Matrix Visualizer:** When a key is inspected, any keys you mistakenly hit instead of that target key light up in red, showing your finger reach slips right on the keyboard.
-* **🔑 Interactive Single-Key Inspection (Pinned to Top):**
-  * **Press ANY key (e.g. `[D]`, `[E]`, `[R]`, `[Space]`)** or click any key / table row on the board: that key's error analysis immediately moves directly to the **very top of the Error Board and top of the table** so you can check it instantly.
-  * Displays the target key, proper finger and position hint, exact mistyped characters with error counts, accuracy percentage, and root-cause finger diagnosis.
+* **✨ Real-Time Physical Key Highlighting:**
+  * **Press ANY key on your physical keyboard** (e.g. `[A]`, `[E]`, `[R]`, `[Space]`): that key is instantly highlighted in bold reverse video in the Error Board list with `➔ [A]`.
+  * **Auto-Scroll:** Automatically scrolls the list to bring the pressed key directly into view.
+  * **Zero-Mistake Confirmation:** If you press a key with 0 errors, a confirmation banner displays your clean record (e.g. `✅ Key [ A ]: 0 mistakes recorded! (57/57 clean hits)`).
+* **📊 Error & Press Count Tracking `(10/57)`:**
+  * Whenever errors are displayed, the Error Board includes the total number of times you have pressed that key in the format `(errors/presses)`, such as `10 (10/57)`.
+  * The top overview stat row summarizes total errors and total keystrokes: `❌ Total Mistakes: 10 (10/57)`.
+  * Key inspection banner displays errors vs total attempts: `❌ Mistakes: 10 (10/57)`.
 * **🎯 High-Density Focused Practice Mode (Error Board Protected):**
-  * While inspecting any key, press **`[ENTER]`** (or click the practice button) to enter a focused drill where words are heavily saturated with that letter (including words with 2, 3, or more occurrences of that target key).
+  * While highlighting any key, press **`[ENTER]`** (or click the practice button) to enter a focused drill where words are heavily saturated with that letter (including words with 2, 3, or more occurrences of that target key).
   * **Protected Stats:** Errors made during focused key practice drills are **not added to the Error Board**, keeping your real-world typing metrics pure and uninflated.
   * Prominent target drill banner displayed throughout practice.
   * Hitting **`[ENTER]`** upon drill completion immediately serves a fresh set of high-density practice words for that same key!
-* **📋 Confusion Matrix Overview:** Displays an overview table showing:
-  * **Target Key:** The letter you were supposed to type.
-  * **Total Errors:** How many times you've mistyped that letter.
-  * **Mistyped With (Count):** Exactly which keys your fingers accidentally hit (e.g. `'e' (3x), 's' (1x)`).
-  * **Accuracy Rate:** Precision percentage per key.
-  * **Finger & Root Cause Analysis:** Explains whether you used the same finger (reached off-target), an adjacent finger on the same hand, or the wrong hand entirely.
+* **📋 Confusion Matrix Table:**
+  * **TARGET:** The letter you were supposed to type.
+  * **ERRORS (ERR/PRESSES):** Number of typos vs total times pressed, formatted as `10 (10/57)`.
+  * **ACCURACY:** Precision percentage for that specific key.
+  * **MISTYPED WITH (COUNT):** Exactly which keys your fingers accidentally hit (e.g. `'e' (8x), 's' (2x)`).
 * **🎯 Practice Weak Keys [ENTER / F2]:** Generates a custom practice session filled with words specifically containing your most mistyped letters!
-* **🔄 Scope Toggle [F1 / TAB]:** Switch between your current session's mistakes and all-time persistent stats saved in `~/.config/ttyping/mistakes.json`.
+* **🔄 Scope Toggle [F1]:** Switch between your current session's mistakes and all-time persistent stats saved in `~/.config/ttyping/mistakes.json`.
 * **🧹 Clear Stats [F3]:** Reset your mistake history whenever you want to measure fresh progress.
 
 ---
@@ -82,14 +81,14 @@ A lightweight, responsive, and distraction-free terminal typing speed and practi
    * **`TAB`:** Cycle through all modes (`Sprint` ➔ `Endless` ➔ `Tutor` ➔ `Board`).
    * **`ENTER` / `F2`:** Advance to next drill in Tutor mode.
    * **On Error Board:**
-      * **Press ANY key (e.g. `D`, `E`, `S`, `Space`):** Highlights the key in real-time on the visual keyboard and inspects its errors & diagnosis.
-      * **Click ANY key:** Mouse-clickable keycaps to inspect and highlight any key directly on the keyboard.
-      * **`ENTER`:** Practice words densely packed with the inspected key (or practice top weak keys if none inspected).
-      * **`Backspace` / `ESC`:** Close key inspection and return to full table.
-     * **`F1` / `TAB`:** Toggle between Session and All-Time stats.
-     * **`F2`:** Practice top weak keys drill.
-     * **`F3` / `Delete`:** Clear mistake statistics.
-     * **`↑` / `↓` / `PgUp` / `PgDn`:** Scroll through the mistake table.
+      * **Press ANY key on physical keyboard (e.g. `A`, `D`, `E`, `Space`):** Highlights that key in the list and shows its mistake count vs attempts `(10/57)`.
+      * **`↑` / `↓`:** Navigate and highlight keys through the list.
+      * **`ENTER`:** Practice words densely packed with the highlighted key (or practice top weak keys if none highlighted).
+      * **`Backspace` / `ESC`:** Clear key highlight and return to overall summary.
+      * **`F1`:** Toggle between Session and All-Time stats.
+      * **`F2`:** Practice top weak keys drill.
+      * **`F3` / `Delete`:** Clear mistake statistics.
+      * **`PgUp` / `PgDn`:** Scroll through the mistake table.
 3. **💻 CLI Flags:**
    ```bash
    ttyping --sprint     # Launch in Sprint Mode (or: ttyping -1)
