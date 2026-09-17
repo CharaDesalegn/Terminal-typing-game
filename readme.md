@@ -71,6 +71,25 @@ A lightweight, responsive, and distraction-free terminal typing speed and practi
 * **🔄 Scope Toggle [F1]:** Switch between your current session's mistakes and all-time persistent stats saved in `~/.config/ttyping/mistakes.json`.
 * **🧹 Clear Stats [F3]:** Reset your mistake history whenever you want to measure fresh progress.
 
+### 5. 🤖 Vintage 3D Mechanical Typing Instructor (`ttyping -5` / `./typing_instructor.py`)
+* **Goal:** A full-screen, vintage typing instructor interface inspired by classic typing software, rendered in 24-bit TrueColor ANSI with zero screen flicker.
+* **⌨️ Full-Window Mechanical Keyboard:**
+  * Multi-line 3D beveled keycaps with centered 3×3 block Figlet letter glyphs (`█`, `▀`, `▄`).
+  * Authentic IBM Model M enclosure with beveled chassis borders and indicator LEDs.
+  * Keys physically depress on keystroke with inverted neon TrueColor glow and tactile shadow offset.
+* **🖐️ Layered Shaded Hands & Finger Reach Animation:**
+  * Two hands rendered in density-shaded ASCII (`█, ▓, ▒, ░, (, ), /, \`) with realistic anatomy, thumbs on spacebar, and wrists extending to the bottom edge.
+  * 10 independent finger state machines: fingers smoothly reach from home row (`ASDF` / `JKL;`) to target keys, depress keycaps, and retract.
+* **🎨 4 Retro TrueColor Themes (Toggle with `[T]`):**
+  * **IBM Model M (1985):** Industrial slate grey chassis, off-white/beige PBT keycaps, electric neon cyan strike.
+  * **Cyberpunk 2077 / Synthwave:** Deep violet chassis, twilight keycaps, vivid hot neon pink strikes.
+  * **Retro Phosphor CRT (Matrix):** Terminal carbon chassis, monochrome dark green keycaps, blinding phosphor green glow.
+  * **Apple Extended Keyboard II:** Snow White platinum chassis, light grey keycaps, warm vintage amber strikes.
+* **📚 3 Operating Modes (Toggle with `[TAB]`):**
+  * **Guided Lesson:** Practice drills with real-time finger coaching and error alerts.
+  * **Free Key Explorer:** Press any key to see its assigned finger reach and strike.
+  * **Automated Demo:** Virtual typing master fluidly types pangrams and drills at realistic typing speed (~75 WPM).
+
 ---
 
 ## 🕹️ Mode Selection
