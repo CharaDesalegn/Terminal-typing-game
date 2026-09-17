@@ -805,8 +805,8 @@ def choose_line_char(d_in, d_out):
     return '─'
 
 
-def render_dual_line_chart(wpm_pts, err_pts, width=50, height=8):
-    """Render a single combined line chart for WPM and Errors."""
+def render_dual_dot_chart(wpm_pts, err_pts, width=50, height=8, step=2):
+    """Render a single combined dot chart for WPM and Errors (dots instead of lines)."""
     if not wpm_pts:
         wpm_pts = [0.0]
     if not err_pts:
@@ -822,49 +822,37 @@ def render_dual_line_chart(wpm_pts, err_pts, width=50, height=8):
         max_wpm = 50.0
     min_wpm = 0.0
 
-    max_err = max(err_pts)
-    if max_err <= 0:
-        max_err = 5
+    raw_max_err = max(err_pts)
+    max_err = max(raw_max_err, 1)
     min_err = 0
 
     canvas = [[(' ', None) for _ in range(width)] for _ in range(height)]
 
-    series = [
-        ('wpm', wpm_pts, min_wpm, max_wpm, 'green'),
-        ('err', err_pts, min_err, max_err, 'red'),
-    ]
+    span_w = max_wpm - min_wpm if max_wpm > min_wpm else 1.0
+    span_e = max_err - min_err if max_err > min_err else 1.0
 
-    for name, values, min_v, max_v, tag in series:
-        span = max_v - min_v if max_v > min_v else 1.0
-        n = len(values)
-        step = (n - 1) / max(1, width - 1)
-        sampled = [values[min(n - 1, int(round(i * step)))] for i in range(width)]
-        rows = [min(height - 1, max(0, int(round((height - 1) * (1.0 - (v - min_v) / span))))) for v in sampled]
+    n_w = len(wpm_pts)
+    n_e = len(err_pts)
 
-        for c in range(width):
-            d_in = (rows[c] - rows[c - 1]) if c > 0 else 0
-            d_out = (rows[c + 1] - rows[c]) if c < width - 1 else 0
-            ch = choose_line_char(d_in, d_out)
+    for c in range(0, width, step):
+        idx_w = min(n_w - 1, int(round(c * (n_w - 1) / max(1, width - 1))))
+        vw = wpm_pts[idx_w]
+        rw = min(height - 1, max(0, int(round((height - 1) * (1.0 - (vw - min_wpm) / span_w)))))
 
-            existing_ch, existing_tag = canvas[rows[c]][c]
-            if existing_ch != ' ' and existing_tag != tag:
-                canvas[rows[c]][c] = ('✦', 'both')
-            else:
-                canvas[rows[c]][c] = (ch, tag)
+        idx_e = min(n_e - 1, int(round(c * (n_e - 1) / max(1, width - 1))))
+        ve = err_pts[idx_e]
+        re = min(height - 1, max(0, int(round((height - 1) * (1.0 - (ve - min_err) / span_e)))))
 
-            if c < width - 1:
-                r0 = rows[c]
-                r1 = rows[c + 1]
-                low = min(r0, r1)
-                high = max(r0, r1)
-                for mid_r in range(low + 1, high):
-                    ex_ch, ex_tag = canvas[mid_r][c]
-                    if ex_ch != ' ' and ex_tag != tag:
-                        canvas[mid_r][c] = ('✦', 'both')
-                    else:
-                        canvas[mid_r][c] = ('│', tag)
+        canvas[rw][c] = ('●', 'green')
+        if rw == re:
+            canvas[rw][c] = ('◉', 'both')
+        else:
+            canvas[re][c] = ('●', 'red')
 
-    return canvas, max_wpm, max_err
+    return canvas, max_wpm, raw_max_err
+
+
+render_dual_line_chart = render_dual_dot_chart
 
 
 def draw_graph_screen(stdscr, engine, stats, history_tracker, max_y, max_x, colors, top_buttons):
@@ -883,28 +871,27 @@ def draw_graph_screen(stdscr, engine, stats, history_tracker, max_y, max_x, colo
     if len(err_pts) < 2:
         err_pts = [err_pts[0], err_pts[0]]
 
-    # Combined Dual Line Chart (WPM & Errors on one single line graph)
+    # Combined Dual Dot Chart (WPM & Errors on one single dot graph)
     g_height = 8 if max_y >= 28 else (6 if max_y >= 24 else 5)
     g_width = max(20, min(65, max_x - 18))
 
-    canvas, mw, me = render_dual_line_chart(wpm_pts, err_pts, width=g_width, height=g_height)
+    canvas, mw, me = render_dual_dot_chart(wpm_pts, err_pts, width=g_width, height=g_height, step=2)
 
-    # Line Chart Legend
+    # Dot Chart Legend
     safe_addstr(stdscr, 4, 4, "📈", curses.A_BOLD)
-    safe_addstr(stdscr, 4, 7, "── ⚡ WPM", curses.A_BOLD | c_green)
-    safe_addstr(stdscr, 4, 18, "── ❌ ERRORS", curses.A_BOLD | c_red)
+    safe_addstr(stdscr, 4, 7, "● ⚡ WPM", curses.A_BOLD | c_green)
+    safe_addstr(stdscr, 4, 18, "● ❌ ERRORS", curses.A_BOLD | c_red)
     if max_x >= 45:
-        safe_addstr(stdscr, 4, 33, "(✦ Crossing)", c_yellow)
+        safe_addstr(stdscr, 4, 33, "(◉ Crossing)", c_yellow)
 
     base_y = 5
     for r in range(g_height):
         w_tick = int(round(mw * (g_height - 1 - r) / max(1, g_height - 1)))
-        e_tick = int(round(me * (g_height - 1 - r) / max(1, g_height - 1)))
 
         # Left axis (WPM)
         safe_addstr(stdscr, base_y + r, 4, f"{w_tick:3d} │", curses.A_BOLD | c_green)
 
-        # Line chart cells
+        # Dot chart cells
         for c in range(g_width):
             ch, tag = canvas[r][c]
             if ch != ' ':
@@ -919,7 +906,14 @@ def draw_graph_screen(stdscr, engine, stats, history_tracker, max_y, max_x, colo
                 safe_addstr(stdscr, base_y + r, 9 + c, ch, attr)
 
         # Right axis (Errors)
-        safe_addstr(stdscr, base_y + r, 9 + g_width, f"│ {e_tick:2d}", curses.A_BOLD | c_red)
+        if me > 0:
+            e_tick = int(round(me * (g_height - 1 - r) / max(1, g_height - 1)))
+            safe_addstr(stdscr, base_y + r, 9 + g_width, f"│ {e_tick:2d}", curses.A_BOLD | c_red)
+        else:
+            if r == g_height - 1:
+                safe_addstr(stdscr, base_y + r, 9 + g_width, "│  0", curses.A_BOLD | c_red)
+            else:
+                safe_addstr(stdscr, base_y + r, 9 + g_width, "│   ", curses.A_BOLD | c_red)
 
     bot_y = base_y + g_height
     safe_addstr(stdscr, bot_y, 4, "    └──" + "─" * g_width + "──┘", c_faded)
