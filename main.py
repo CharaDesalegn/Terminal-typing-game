@@ -28,6 +28,7 @@ import json
 import random
 import argparse
 import curses
+import atexit
 
 # Mode 1: Clean, natural English sentences for 1-2 minute WPM tests
 SPRINT_SENTENCES = [
@@ -1877,15 +1878,38 @@ def main():
                 * Confusion matrix showing mistake counts vs total presses (e.g. 10/57)
                 * Real-time physical keyboard key highlighting
                 * Targeted practice drills for your weakest keys
+  5: Instructor - Full-screen Vintage Mechanical Keyboard Instructor:
+                * 3D beveled mechanical keycaps with 3x3 block Figlet fonts
+                * Shaded density ASCII hands and realistic finger reach animation
+                * 24-bit TrueColor themes (IBM Model M, Cyberpunk, Phosphor CRT, Apple II)
+                * Guided Lessons, Free Key Explorer, and Automated Demo
 """
     )
     parser.add_argument("-1", "--sprint", action="store_true", help="Launch directly in Sprint Mode (1-2 min WPM test)")
     parser.add_argument("-2", "--endless", action="store_true", help="Launch directly in Endless Mode (controlled practice)")
     parser.add_argument("-3", "--tutor", action="store_true", help="Launch directly in Tutor Mode (QWERTY touch typing finger guide)")
     parser.add_argument("-4", "--board", "--errors", action="store_true", help="Launch directly in Error & Mistake Board")
+    parser.add_argument("-5", "--instructor", action="store_true", help="Launch directly in Full-Screen Mechanical Keyboard Instructor")
+    parser.add_argument("--theme", type=int, default=0, help="Theme index for Instructor Mode (0: IBM, 1: Cyberpunk, 2: Phosphor, 3: Apple)")
+    parser.add_argument("--interactive", action="store_true", help="Start Instructor in interactive guided lesson mode")
+    parser.add_argument("--free", action="store_true", help="Start Instructor in free key explorer mode")
+    parser.add_argument("--frames", type=int, default=None, help="Run Instructor for N frames (automated testing)")
     parser.add_argument("custom", nargs="*", help="Optional custom text or sentence to practice")
 
     args = parser.parse_args()
+
+    if args.instructor:
+        import typing_instructor
+        app = typing_instructor.TypingInstructorApp()
+        if args.interactive:
+            app.mode = typing_instructor.AppMode.GUIDED_LESSON
+        elif args.free:
+            app.mode = typing_instructor.AppMode.FREE_PLAY
+        if 0 <= args.theme < len(typing_instructor.THEMES):
+            app.theme_idx = args.theme
+        atexit.register(app.restore_terminal)
+        app.run(max_frames=args.frames)
+        return
 
     mode = "SPRINT"
     if args.board:

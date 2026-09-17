@@ -6,9 +6,11 @@ Features:
   - Large multi-line ASCII block keycaps with 3x3 block letter glyphs.
   - Layered density-shaded ASCII hands (█, ▓, ▒, ░, (, ), /, \) with realistic anatomy.
   - Dynamic finger reach, keycap depression, and retraction animation cycle.
-  - 24-bit TrueColor ANSI palette (flesh tones, vintage beige/slate keycaps, neon active keys).
-  - Interactive touch-typing mode + automated demo typing tutor mode (toggle with TAB).
-  - Flicker-free double-buffered atomic rendering engine.
+  - 24-bit TrueColor ANSI palette with 4 selectable retro themes (IBM Model M, Cyberpunk, Phosphor CRT, Apple II).
+  - 3 operating modes: Guided Lesson (interactive drill practice with real-time finger coaching),
+    Free Key Explorer (type freely to see hands move), and Automated Demo (watch typing tutor).
+  - Multi-category drill library (Home Row, E/I additions, Pangrams, Numbers & Symbols).
+  - Real-time WPM, accuracy, streak, error highlighting, and flicker-free double buffering.
 """
 
 import sys
@@ -25,7 +27,7 @@ import random
 from typing import Dict, List, Tuple, Optional, Any
 
 # ============================================================================
-# 24-Bit TrueColor ANSI Helpers & Color Palette
+# 24-Bit TrueColor ANSI Helpers & Color Themes
 # ============================================================================
 
 RESET = "\033[0m"
@@ -38,47 +40,126 @@ def fg(r: int, g: int, b: int) -> str:
 def bg(r: int, g: int, b: int) -> str:
     return f"\033[48;2;{r};{g};{b}m"
 
-# Palette: Retro Mechanical Keyboard (IBM Model M Style)
-COLOR_DESK_BG         = (16, 18, 22)        # Dark desk backdrop
-COLOR_CHASSIS_BG      = (36, 39, 46)        # Outer enclosure
-COLOR_CHASSIS_BORDER  = (82, 88, 102)       # Enclosure top bevel highlight
-COLOR_CHASSIS_SHADOW  = (22, 24, 28)        # Enclosure drop shadow
-COLOR_PLATE_BG        = (24, 26, 30)        # Switch mounting plate well
+# Theme Definitions
+THEMES = [
+    {
+        "name": "IBM Model M (1985)",
+        "desk_bg": (16, 18, 22),
+        "chassis_bg": (36, 39, 46),
+        "chassis_border": (82, 88, 102),
+        "chassis_shadow": (22, 24, 28),
+        "plate_bg": (24, 26, 30),
+        "alpha_bg": (220, 216, 206),
+        "alpha_fg": (32, 35, 42),
+        "alpha_top": (245, 243, 238),
+        "alpha_bot": (155, 150, 140),
+        "alpha_side": (192, 188, 178),
+        "mod_bg": (138, 134, 128),
+        "mod_fg": (240, 240, 240),
+        "mod_top": (170, 166, 160),
+        "mod_bot": (98, 94, 90),
+        "mod_side": (124, 120, 115),
+        "active_bg": (0, 235, 255),      # Neon Cyan
+        "active_fg": (10, 16, 26),
+        "active_border": (0, 180, 220),
+        "error_bg": (255, 50, 60),       # Error Red
+        "target_border": (255, 205, 40), # Gold Target
+        "skin_high": (248, 214, 188),
+        "skin_mid": (222, 170, 132),
+        "skin_low": (172, 118, 84),
+        "nail_col": (252, 232, 220),
+    },
+    {
+        "name": "Cyberpunk 2077 / Synthwave",
+        "desk_bg": (12, 8, 22),
+        "chassis_bg": (32, 16, 48),
+        "chassis_border": (110, 45, 155),
+        "chassis_shadow": (18, 8, 28),
+        "plate_bg": (20, 10, 32),
+        "alpha_bg": (48, 32, 68),
+        "alpha_fg": (230, 210, 255),
+        "alpha_top": (75, 52, 105),
+        "alpha_bot": (30, 18, 45),
+        "alpha_side": (58, 40, 82),
+        "mod_bg": (80, 24, 75),
+        "mod_fg": (255, 200, 240),
+        "mod_top": (115, 42, 108),
+        "mod_bot": (52, 14, 50),
+        "mod_side": (90, 30, 85),
+        "active_bg": (255, 30, 130),     # Hot Magenta Pink
+        "active_fg": (255, 255, 255),
+        "active_border": (255, 100, 180),
+        "error_bg": (255, 30, 30),
+        "target_border": (0, 245, 255),  # Electric Cyan Target
+        "skin_high": (250, 200, 180),
+        "skin_mid": (215, 150, 140),
+        "skin_low": (155, 95, 100),
+        "nail_col": (255, 220, 240),
+    },
+    {
+        "name": "Retro Phosphor CRT (Matrix)",
+        "desk_bg": (8, 14, 10),
+        "chassis_bg": (18, 28, 22),
+        "chassis_border": (45, 85, 55),
+        "chassis_shadow": (10, 18, 12),
+        "plate_bg": (12, 20, 15),
+        "alpha_bg": (22, 45, 30),
+        "alpha_fg": (75, 255, 130),
+        "alpha_top": (38, 72, 50),
+        "alpha_bot": (14, 30, 20),
+        "alpha_side": (28, 55, 38),
+        "mod_bg": (32, 60, 42),
+        "mod_fg": (150, 255, 180),
+        "mod_top": (50, 90, 65),
+        "mod_bot": (20, 40, 28),
+        "mod_side": (40, 75, 52),
+        "active_bg": (50, 255, 90),      # Blinding Green
+        "active_fg": (6, 20, 10),
+        "active_border": (130, 255, 160),
+        "error_bg": (255, 60, 40),
+        "target_border": (255, 230, 50),
+        "skin_high": (230, 220, 180),
+        "skin_mid": (185, 175, 130),
+        "skin_low": (130, 120, 85),
+        "nail_col": (245, 240, 210),
+    },
+    {
+        "name": "Apple Extended Keyboard II",
+        "desk_bg": (22, 22, 22),
+        "chassis_bg": (212, 206, 192),
+        "chassis_border": (240, 235, 222),
+        "chassis_shadow": (160, 154, 142),
+        "plate_bg": (145, 140, 130),
+        "alpha_bg": (242, 239, 232),
+        "alpha_fg": (35, 35, 38),
+        "alpha_top": (255, 255, 250),
+        "alpha_bot": (195, 190, 180),
+        "alpha_side": (225, 220, 212),
+        "mod_bg": (185, 180, 170),
+        "mod_fg": (40, 40, 45),
+        "mod_top": (210, 205, 195),
+        "mod_bot": (145, 140, 130),
+        "mod_side": (170, 165, 155),
+        "active_bg": (255, 165, 25),      # Vintage Amber
+        "active_fg": (15, 15, 20),
+        "active_border": (255, 200, 80),
+        "error_bg": (240, 50, 50),
+        "target_border": (0, 180, 240),
+        "skin_high": (248, 214, 188),
+        "skin_mid": (222, 170, 132),
+        "skin_low": (172, 118, 84),
+        "nail_col": (252, 232, 220),
+    }
+]
 
-# Keycaps (Matte Vintage PBT Dye-Sub Beige & Modifiers)
-COLOR_ALPHA_BG        = (220, 216, 206)     # Retro off-white / light cream
-COLOR_ALPHA_FG        = (32, 35, 42)        # Dark charcoal legend
-COLOR_ALPHA_TOP       = (245, 243, 238)     # Highlight bevel
-COLOR_ALPHA_BOT       = (155, 150, 140)     # Bottom shadow bevel
-COLOR_ALPHA_SIDE      = (192, 188, 178)     # Lateral bevel
-
-COLOR_MOD_BG          = (138, 134, 128)     # Warm vintage slate grey
-COLOR_MOD_FG          = (240, 240, 240)     # Off-white modifier text
-COLOR_MOD_TOP         = (170, 166, 160)
-COLOR_MOD_BOT         = (98, 94, 90)
-COLOR_MOD_SIDE        = (124, 120, 115)
-
-# Active Depressed Key (Vibrant Electric Neon Cyan / Amber)
-COLOR_ACTIVE_BG       = (0, 235, 255)       # Glowing neon cyan
-COLOR_ACTIVE_FG       = (10, 16, 26)        # Deep obsidian legend
-COLOR_ACTIVE_BORDER   = (0, 180, 220)       # Depressed border highlight
-COLOR_TARGET_BORDER   = (255, 205, 40)      # Target key border (tutor hint)
-
-# Anatomy: Realistic Shaded Hands & Fingers
-SKIN_HIGHLIGHT        = (248, 214, 188)     # Dorsal/knuckle sheen
-SKIN_MID              = (222, 170, 132)     # Natural warm flesh
-SKIN_LOW              = (172, 118, 84)      # Contour shadow
-SKIN_DARK             = (115, 72, 46)       # Deep outline shadow
-NAIL_COLOR            = (252, 232, 220)     # Fingernail pearlescent sheen
-NAIL_STRIKE           = (255, 255, 255)     # Fingernail pressure flare
-
-# Top Status HUD Accents
+# HUD Accents
 COLOR_HUD_BG          = (24, 27, 34)
 COLOR_HUD_BORDER      = (60, 66, 80)
 COLOR_ACCENT_CYAN     = (0, 235, 255)
 COLOR_ACCENT_GREEN    = (70, 235, 120)
 COLOR_ACCENT_AMBER    = (255, 185, 40)
 COLOR_ACCENT_PINK     = (255, 90, 140)
+COLOR_ACCENT_RED      = (255, 60, 60)
 
 # ============================================================================
 # Large Block Figlet Glyph Sets (3x3 and 2x3 Compact)
@@ -233,9 +314,6 @@ ROW_LAYOUT_SPEC = [
      ("ALT_R", 1.75, "ALT"), ("CTRL_R", 2.75, "CTRL")],
 ]
 
-# Standard touch-typing finger assignment (0 to 9)
-# 0: Left Pinky,  1: Left Ring,   2: Left Middle,   3: Left Index,   4: Left Thumb
-# 5: Right Thumb, 6: Right Index, 7: Right Middle,  8: Right Ring,   9: Right Pinky
 FINGER_NAMES = [
     "Left Pinky", "Left Ring", "Left Middle", "Left Index", "Left Thumb",
     "Right Thumb", "Right Index", "Right Middle", "Right Ring", "Right Pinky"
@@ -282,16 +360,16 @@ class Canvas:
         self.width = width
         self.height = height
         self.chars = [[' ' for _ in range(width)] for _ in range(height)]
-        self.fg = [[COLOR_ALPHA_FG for _ in range(width)] for _ in range(height)]
-        self.bg = [[COLOR_DESK_BG for _ in range(width)] for _ in range(height)]
+        self.fg = [[(200, 200, 200) for _ in range(width)] for _ in range(height)]
+        self.bg = [[(16, 18, 22) for _ in range(width)] for _ in range(height)]
         self.bold = [[False for _ in range(width)] for _ in range(height)]
 
-    def clear(self):
+    def clear(self, desk_bg: Tuple[int, int, int]):
         for y in range(self.height):
             for x in range(self.width):
                 self.chars[y][x] = ' '
-                self.fg[y][x] = COLOR_ALPHA_FG
-                self.bg[y][x] = COLOR_DESK_BG
+                self.fg[y][x] = (200, 200, 200)
+                self.bg[y][x] = desk_bg
                 self.bold[y][x] = False
 
     def set_cell(self, x: int, y: int, ch: str,
@@ -401,7 +479,6 @@ class AnimatedFinger:
 
         elif self.state == FingerState.REACH:
             t = min(1.0, elapsed / max(0.01, self.reach_duration))
-            # Smooth ease-out
             ease = math.sin(t * math.pi / 2.0)
             self.cur_x = self.home_x + (self.target_x - self.home_x) * ease
             self.cur_y = self.home_y + (self.target_y - self.home_y) * ease
@@ -423,7 +500,6 @@ class AnimatedFinger:
 
         elif self.state == FingerState.RETRACT:
             t = min(1.0, elapsed / max(0.01, self.retract_duration))
-            # Smooth ease-in-out
             ease = (1.0 - math.cos(t * math.pi)) / 2.0
             self.cur_x = self.target_x + (self.home_x - self.target_x) * ease
             self.cur_y = self.target_y + (self.home_y - self.target_y) * ease
@@ -440,14 +516,19 @@ class AnimatedFinger:
 # Main Application Engine
 # ============================================================================
 
+class AppMode:
+    GUIDED_LESSON = 0
+    FREE_PLAY = 1
+    AUTO_DEMO = 2
+
 class TypingInstructorApp:
-    DEMO_DRILLS = [
-        "the quick brown fox jumps over the lazy dog",
-        "touch typing with vintage ibm model m buckling springs",
-        "sphinx of black quartz judge my vow pack my box with five dozen jugs",
-        "how vexingly quick daft zebras jump while jackdaws love big quartz",
-        "classic mechanical keyboard typing instructor rendered in full ascii",
-        "proper finger placement asdf and jkl semi builds speed and accuracy",
+    DRILL_CATEGORIES = [
+        ("Home Row Basics", "asdf jkl; a sad lad fall ask flask fall all salad"),
+        ("Home Row + E & I", "fee side leaf lake slide jade deals alike safe fake deed"),
+        ("Home Row + R & U", "dark surf fur rail run rural standard flare unfair dark"),
+        ("Full Alphabet Pangram", "the quick brown fox jumps over the lazy dog"),
+        ("Vintage Mechanical Drill", "touch typing with vintage ibm model m buckling springs"),
+        ("Numbers & Symbols", "12345 67890 !@#$% ^&*() - = + _ [ ] { } ; : ' \" , . / ?"),
     ]
 
     def __init__(self):
@@ -460,23 +541,29 @@ class TypingInstructorApp:
         self.keys: Dict[str, Dict[str, Any]] = {}
         self.fingers: List[AnimatedFinger] = []
 
-        # Modes & Metrics
-        self.demo_mode = True
-        self.current_drill_idx = 0
+        # Modes & Themes
+        self.mode = AppMode.AUTO_DEMO
+        self.theme_idx = 0
+        self.drill_cat_idx = 0
         self.drill_char_idx = 0
         self.last_demo_strike_time = 0.0
         self.demo_char_delay = 0.16
 
         self.active_depressed_keys: set[str] = set()
+        self.mistyped_key: Optional[str] = None
+        self.mistyped_until: float = 0.0
         self.target_key: Optional[str] = None
         self.last_pressed_finger_name: str = "Ready"
+        self.tutor_feedback: str = "Welcome! Practice proper touch-typing technique."
 
         # Typing stats
         self.total_keypresses = 0
         self.correct_keypresses = 0
         self.streak = 0
+        self.errors = 0
         self.start_time = time.time()
         self.wpm = 0.0
+        self.accuracy = 100.0
 
         # Termios backup
         self.old_termios = None
@@ -485,9 +572,20 @@ class TypingInstructorApp:
         self._build_keyboard_geometry()
         self._init_fingers()
 
+    @property
+    def theme(self) -> Dict[str, Any]:
+        return THEMES[self.theme_idx]
+
+    @property
+    def current_drill_text(self) -> str:
+        return self.DRILL_CATEGORIES[self.drill_cat_idx][1]
+
+    @property
+    def current_drill_name(self) -> str:
+        return self.DRILL_CATEGORIES[self.drill_cat_idx][0]
+
     def _calculate_dimensions(self):
         """Calculates optimal key width, key height, and canvas centering."""
-        # Width scaling
         if self.term_w >= 115:
             self.unit_w = 7
         elif self.term_w >= 85:
@@ -495,7 +593,6 @@ class TypingInstructorApp:
         else:
             self.unit_w = max(4, (self.term_w - 6) // 15)
 
-        # Height scaling
         if self.term_h >= 36:
             self.unit_h = 5
         elif self.term_h >= 28:
@@ -507,7 +604,6 @@ class TypingInstructorApp:
         self.kbd_h = 5 * self.unit_h
         self.kbd_x = max(2, (self.term_w - self.kbd_w) // 2)
 
-        # Top padding
         if self.term_h >= 36:
             self.kbd_y = 5
         elif self.term_h >= 28:
@@ -569,7 +665,6 @@ class TypingInstructorApp:
             (key_sp['x'] + key_sp['w'] * 0.32, key_sp['y'] + tip_offset_y * 0.7),
         ]
 
-        # Knuckle arch on palm below row 3
         row3_y = self.keys["SHIFT_L"]['y'] + self.unit_h
         knuckle_gap = max(0.5, self.unit_h * 0.15)
         knuckles_L = [
@@ -602,7 +697,6 @@ class TypingInstructorApp:
             (key_semi['center_x'] + 0.5, row3_y + knuckle_gap * 1.6),
         ]
 
-        # Assemble all 10 fingers
         for f_id in range(5):
             hx, hy = home_L[f_id]
             kx, ky = knuckles_L[f_id]
@@ -625,19 +719,21 @@ class TypingInstructorApp:
     # Animation & Key Action Triggers
     # ------------------------------------------------------------------------
 
+    def _normalize_key(self, char_or_key: str) -> str:
+        norm = char_or_key.upper()
+        if char_or_key in SHIFTED_MAP:
+            norm = SHIFTED_MAP[char_or_key]
+        elif char_or_key == ' ':
+            norm = "SPACE"
+        elif char_or_key in ('\r', '\n'):
+            norm = "ENTER"
+        elif char_or_key in ('\x7f', '\x08'):
+            norm = "BACKSPACE"
+        return norm
+
     def trigger_key_strike(self, char_or_key: str):
         """Triggers the corresponding finger to reach, depress, and retract."""
-        norm_key = char_or_key.upper()
-        # Check shifted symbols
-        if char_or_key in SHIFTED_MAP:
-            norm_key = SHIFTED_MAP[char_or_key]
-        elif char_or_key == ' ':
-            norm_key = "SPACE"
-        elif char_or_key in ('\r', '\n'):
-            norm_key = "ENTER"
-        elif char_or_key in ('\x7f', '\x08'):
-            norm_key = "BACKSPACE"
-
+        norm_key = self._normalize_key(char_or_key)
         target_data = self.keys.get(norm_key)
         if not target_data:
             return
@@ -645,17 +741,58 @@ class TypingInstructorApp:
         finger_idx = target_data['finger']
         if 0 <= finger_idx < len(self.fingers):
             finger = self.fingers[finger_idx]
-            # Strike at key center
             tx = target_data['center_x']
             ty = target_data['center_y']
             finger.strike_target(tx, ty, norm_key)
             self.last_pressed_finger_name = finger.name
-            self.total_keypresses += 1
-            self.streak += 1
 
-            # Update stats
-            elapsed_m = max(0.05, (time.time() - self.start_time) / 60.0)
-            self.wpm = (self.total_keypresses / 5.0) / elapsed_m
+    def handle_interactive_stroke(self, char_pressed: str):
+        """Processes keystroke in Guided Lesson or Free Play mode."""
+        self.total_keypresses += 1
+        norm_pressed = self._normalize_key(char_pressed)
+
+        # Trigger finger animation for whichever key was hit
+        self.trigger_key_strike(char_pressed)
+
+        if self.mode == AppMode.GUIDED_LESSON:
+            drill_text = self.current_drill_text
+            if self.drill_char_idx < len(drill_text):
+                expected_char = drill_text[self.drill_char_idx]
+                norm_expected = self._normalize_key(expected_char)
+
+                if norm_pressed == norm_expected:
+                    # Correct strike!
+                    self.correct_keypresses += 1
+                    self.streak += 1
+                    self.drill_char_idx += 1
+                    f_name = FINGER_NAMES[KEY_TO_FINGER.get(norm_expected, 0)]
+                    self.tutor_feedback = f"Great! Hit '{expected_char}' with {f_name}."
+
+                    if self.drill_char_idx >= len(drill_text):
+                        self.drill_char_idx = 0
+                        self.drill_cat_idx = (self.drill_cat_idx + 1) % len(self.DRILL_CATEGORIES)
+                        self.tutor_feedback = f"Drill completed! Advanced to: {self.current_drill_name}"
+                else:
+                    # Mistake!
+                    self.errors += 1
+                    self.streak = 0
+                    self.mistyped_key = norm_pressed
+                    self.mistyped_until = time.time() + 0.22
+                    exp_finger = FINGER_NAMES[KEY_TO_FINGER.get(norm_expected, 0)]
+                    got_finger = FINGER_NAMES[KEY_TO_FINGER.get(norm_pressed, 0)]
+                    self.tutor_feedback = f"Oops: Pressed '{char_pressed}' ({got_finger}) instead of '{expected_char}' ({exp_finger})!"
+
+        elif self.mode == AppMode.FREE_PLAY:
+            self.correct_keypresses += 1
+            self.streak += 1
+            f_name = FINGER_NAMES[KEY_TO_FINGER.get(norm_pressed, 0)]
+            self.tutor_feedback = f"Key '{norm_pressed}' triggered {f_name}."
+
+        # Update metrics
+        elapsed_m = max(0.05, (time.time() - self.start_time) / 60.0)
+        self.wpm = (self.correct_keypresses / 5.0) / elapsed_m
+        if self.total_keypresses > 0:
+            self.accuracy = (self.correct_keypresses / self.total_keypresses) * 100.0
 
     # ------------------------------------------------------------------------
     # Drawing Pipeline
@@ -663,45 +800,58 @@ class TypingInstructorApp:
 
     def draw_hud(self):
         """Renders top vintage status HUD, indicators, and metrics."""
-        # Title bar
+        t = self.theme
+        mode_labels = {
+            AppMode.GUIDED_LESSON: ("[ MODE: GUIDED LESSON ]", COLOR_ACCENT_CYAN),
+            AppMode.FREE_PLAY:     ("[ MODE: FREE KEY EXPLORER ]", COLOR_ACCENT_AMBER),
+            AppMode.AUTO_DEMO:     ("[ MODE: AUTOMATED DEMO ]", COLOR_ACCENT_GREEN),
+        }
+        mode_str, mode_col = mode_labels[self.mode]
+
+        # Line 0: Header & Controls
         title = " ⌨  VINTAGE TYPING INSTRUCTOR  //  IBM MODEL M MECHANICAL  "
-        mode_str = "[ AUTOMATED DEMO (TAB to switch) ]" if self.demo_mode else "[ INTERACTIVE USER TYPING (TAB to demo) ]"
-
         self.canvas.draw_text(self.kbd_x, 0, title, COLOR_ACCENT_AMBER, COLOR_HUD_BG, bold=True)
-        self.canvas.draw_text(self.kbd_x + len(title) + 2, 0, mode_str,
-                              COLOR_ACCENT_GREEN if self.demo_mode else COLOR_ACCENT_CYAN,
-                              COLOR_HUD_BG, bold=True)
+        self.canvas.draw_text(self.kbd_x + len(title) + 2, 0, mode_str, mode_col, COLOR_HUD_BG, bold=True)
 
-        # Status & Metrics
-        hud_line2 = (
-            f"  WPM: {self.wpm:5.1f}  │  STREAK: {self.streak:3d}  │  "
-            f"TOTAL KEYS: {self.total_keypresses:4d}  │  "
-            f"LAST FINGER: {self.last_pressed_finger_name:<12}  │  [ESC/Q] Quit"
+        controls = f"  [TAB] Mode  │  [T] Theme: {t['name'][:14]}  │  [D] Drill  │  [ESC] Quit"
+        self.canvas.draw_text(self.kbd_x, 1, controls, (180, 190, 205), COLOR_HUD_BG)
+
+        # Line 2: Metrics Bar
+        metrics = (
+            f"  WPM: {self.wpm:5.1f}  │  ACCURACY: {self.accuracy:5.1f}%  │  "
+            f"STREAK: {self.streak:3d}  │  ERRORS: {self.errors:2d}  │  "
+            f"FINGER: {self.last_pressed_finger_name:<12}"
         )
-        self.canvas.draw_text(self.kbd_x, 1, hud_line2, (200, 205, 215), COLOR_HUD_BG)
+        self.canvas.draw_text(self.kbd_x, 2, metrics, (215, 220, 230), COLOR_HUD_BG, bold=True)
 
-        # Drill sentence display (in Demo mode)
-        drill_text = self.DEMO_DRILLS[self.current_drill_idx]
-        drill_prompt = "  DRILL:  " + drill_text
-        self.canvas.draw_text(self.kbd_x, 2, drill_prompt, (170, 180, 195), COLOR_DESK_BG)
+        # Line 3: Drill Prompt or Feedback
+        if self.mode in (AppMode.GUIDED_LESSON, AppMode.AUTO_DEMO):
+            drill_text = self.current_drill_text
+            prompt = f"  [{self.current_drill_name}]: " + drill_text
+            self.canvas.draw_text(self.kbd_x, 3, prompt, (160, 175, 195), t["desk_bg"])
 
-        # Highlight current target character
-        if self.demo_mode:
-            target_col = self.kbd_x + 10 + self.drill_char_idx
+            # Highlight current target character
+            target_col = self.kbd_x + len(f"  [{self.current_drill_name}]: ") + self.drill_char_idx
             ch = drill_text[self.drill_char_idx] if self.drill_char_idx < len(drill_text) else " "
-            self.canvas.draw_text(target_col, 2, ch, (10, 20, 30), COLOR_ACTIVE_BG, bold=True)
+            self.canvas.draw_text(target_col, 3, ch, t["active_fg"], t["active_bg"], bold=True)
+
+        # Line 4: Tutor Coaching Tip
+        tip_line = f"  👉 {self.tutor_feedback}"
+        tip_col = COLOR_ACCENT_RED if "Oops" in self.tutor_feedback else COLOR_ACCENT_GREEN
+        self.canvas.draw_text(self.kbd_x, 4, tip_line, tip_col, t["desk_bg"], bold=True)
 
     def draw_keyboard_chassis(self):
         """Renders outer beveled frame, badge, and LEDs for retro mechanical chassis."""
+        t = self.theme
         kx = self.kbd_x
         ky = self.kbd_y
         kw = self.kbd_w
         kh = self.kbd_h
 
-        # Switch plate well (dark recessed backing)
+        # Switch plate well
         for y in range(ky - 1, ky + kh + 1):
             for x in range(kx - 1, kx + kw + 1):
-                self.canvas.set_cell(x, y, ' ', None, COLOR_PLATE_BG)
+                self.canvas.set_cell(x, y, ' ', None, t["plate_bg"])
 
         # Beveled chassis enclosure
         bx1 = kx - 2
@@ -709,33 +859,32 @@ class TypingInstructorApp:
         bx2 = kx + kw + 1
         by2 = ky + kh
 
-        # Horizontal borders
         for x in range(bx1, bx2 + 1):
-            self.canvas.set_cell(x, by1, '═', COLOR_CHASSIS_BORDER, COLOR_CHASSIS_BG)
-            self.canvas.set_cell(x, by2, '═', COLOR_CHASSIS_SHADOW, COLOR_CHASSIS_BG)
+            self.canvas.set_cell(x, by1, '═', t["chassis_border"], t["chassis_bg"])
+            self.canvas.set_cell(x, by2, '═', t["chassis_shadow"], t["chassis_bg"])
 
-        # Vertical borders
         for y in range(by1, by2 + 1):
-            self.canvas.set_cell(bx1, y, '║', COLOR_CHASSIS_BORDER, COLOR_CHASSIS_BG)
-            self.canvas.set_cell(bx2, y, '║', COLOR_CHASSIS_SHADOW, COLOR_CHASSIS_BG)
+            self.canvas.set_cell(bx1, y, '║', t["chassis_border"], t["chassis_bg"])
+            self.canvas.set_cell(bx2, y, '║', t["chassis_shadow"], t["chassis_bg"])
 
-        # Corners
-        self.canvas.set_cell(bx1, by1, '╔', COLOR_CHASSIS_BORDER, COLOR_CHASSIS_BG)
-        self.canvas.set_cell(bx2, by1, '╗', COLOR_CHASSIS_BORDER, COLOR_CHASSIS_BG)
-        self.canvas.set_cell(bx1, by2, '╚', COLOR_CHASSIS_BORDER, COLOR_CHASSIS_BG)
-        self.canvas.set_cell(bx2, by2, '╝', COLOR_CHASSIS_SHADOW, COLOR_CHASSIS_BG)
+        self.canvas.set_cell(bx1, by1, '╔', t["chassis_border"], t["chassis_bg"])
+        self.canvas.set_cell(bx2, by1, '╗', t["chassis_border"], t["chassis_bg"])
+        self.canvas.set_cell(bx1, by2, '╚', t["chassis_border"], t["chassis_bg"])
+        self.canvas.set_cell(bx2, by2, '╝', t["chassis_shadow"], t["chassis_bg"])
 
-        # Vintage IBM Badge & Status LEDs
+        # Vintage Badge & Status LEDs
         badge = " [ IBM MODEL M ] "
-        self.canvas.draw_text(bx1 + 3, by1, badge, (190, 195, 205), COLOR_CHASSIS_BG, bold=True)
+        self.canvas.draw_text(bx1 + 3, by1, badge, (190, 195, 205), t["chassis_bg"], bold=True)
 
         leds = " [ NUM ⬤ ] [ CAPS ◯ ] [ SCROLL ◯ ] "
         if bx2 - len(leds) - 2 > bx1 + len(badge) + 6:
-            self.canvas.draw_text(bx2 - len(leds) - 1, by1, leds, (140, 220, 160), COLOR_CHASSIS_BG)
+            self.canvas.draw_text(bx2 - len(leds) - 1, by1, leds, (140, 220, 160), t["chassis_bg"])
 
     def draw_keycaps(self):
         """Renders large multi-line ASCII block keycaps with centered block font glyphs."""
+        t = self.theme
         glyph_set = GLYPHS_3X3 if self.unit_h >= 5 else GLYPHS_2X3
+        now = time.time()
 
         for key_id, k in self.keys.items():
             x, y, w, h = k['x'], k['y'], k['w'], k['h']
@@ -743,51 +892,56 @@ class TypingInstructorApp:
             is_mod = k['is_modifier']
             is_space = k['is_space']
             is_pressed = key_id in self.active_depressed_keys
+            is_mistyped = (key_id == self.mistyped_key) and (now < self.mistyped_until)
             is_target = (key_id == self.target_key) and not is_pressed
 
             # Color styling
-            if is_pressed:
-                bg_col = COLOR_ACTIVE_BG
-                fg_col = COLOR_ACTIVE_FG
-                top_b = COLOR_ACTIVE_BORDER
-                bot_b = COLOR_ACTIVE_BORDER
-                side_b = COLOR_ACTIVE_BORDER
+            if is_mistyped:
+                bg_col = t["error_bg"]
+                fg_col = (255, 255, 255)
+                top_b = (255, 120, 120)
+                bot_b = (180, 20, 20)
+                side_b = (220, 40, 40)
+            elif is_pressed:
+                bg_col = t["active_bg"]
+                fg_col = t["active_fg"]
+                top_b = t["active_border"]
+                bot_b = t["active_border"]
+                side_b = t["active_border"]
             elif is_mod:
-                bg_col = COLOR_MOD_BG
-                fg_col = COLOR_MOD_FG
-                top_b = COLOR_MOD_TOP
-                bot_b = COLOR_MOD_BOT
-                side_b = COLOR_MOD_SIDE
+                bg_col = t["mod_bg"]
+                fg_col = t["mod_fg"]
+                top_b = t["mod_top"]
+                bot_b = t["mod_bot"]
+                side_b = t["mod_side"]
             else:
-                bg_col = COLOR_ALPHA_BG
-                fg_col = COLOR_ALPHA_FG
-                top_b = COLOR_TARGET_BORDER if is_target else COLOR_ALPHA_TOP
-                bot_b = COLOR_ALPHA_BOT
-                side_b = COLOR_ALPHA_SIDE
+                bg_col = t["alpha_bg"]
+                fg_col = t["alpha_fg"]
+                top_b = t["target_border"] if is_target else t["alpha_top"]
+                bot_b = t["alpha_bot"]
+                side_b = t["alpha_side"]
 
             # Physical 3D keycap beveling
-            if not is_pressed:
-                # Idle high bevel
-                self.canvas.set_cell(x, y, '┌', top_b, COLOR_PLATE_BG)
+            if not is_pressed and not is_mistyped:
+                self.canvas.set_cell(x, y, '┌', top_b, t["plate_bg"])
                 for ix in range(x + 1, x + w - 1):
-                    self.canvas.set_cell(ix, y, '─', top_b, COLOR_PLATE_BG)
-                self.canvas.set_cell(x + w - 1, y, '┐', top_b, COLOR_PLATE_BG)
+                    self.canvas.set_cell(ix, y, '─', top_b, t["plate_bg"])
+                self.canvas.set_cell(x + w - 1, y, '┐', top_b, t["plate_bg"])
 
-                self.canvas.set_cell(x, y + h - 1, '└', bot_b, COLOR_PLATE_BG)
+                self.canvas.set_cell(x, y + h - 1, '└', bot_b, t["plate_bg"])
                 for ix in range(x + 1, x + w - 1):
-                    self.canvas.set_cell(ix, y + h - 1, '─', bot_b, COLOR_PLATE_BG)
-                self.canvas.set_cell(x + w - 1, y + h - 1, '┘', bot_b, COLOR_PLATE_BG)
+                    self.canvas.set_cell(ix, y + h - 1, '─', bot_b, t["plate_bg"])
+                self.canvas.set_cell(x + w - 1, y + h - 1, '┘', bot_b, t["plate_bg"])
             else:
-                # Depressed physical state (keycap sunken into plate)
-                self.canvas.set_cell(x, y, '▗', bot_b, COLOR_PLATE_BG)
+                self.canvas.set_cell(x, y, '▗', bot_b, t["plate_bg"])
                 for ix in range(x + 1, x + w - 1):
-                    self.canvas.set_cell(ix, y, '▄', bot_b, COLOR_PLATE_BG)
-                self.canvas.set_cell(x + w - 1, y, '▖', bot_b, COLOR_PLATE_BG)
+                    self.canvas.set_cell(ix, y, '▄', bot_b, t["plate_bg"])
+                self.canvas.set_cell(x + w - 1, y, '▖', bot_b, t["plate_bg"])
 
-                self.canvas.set_cell(x, y + h - 1, '▝', top_b, COLOR_PLATE_BG)
+                self.canvas.set_cell(x, y + h - 1, '▝', top_b, t["plate_bg"])
                 for ix in range(x + 1, x + w - 1):
-                    self.canvas.set_cell(ix, y + h - 1, '▀', top_b, COLOR_PLATE_BG)
-                self.canvas.set_cell(x + w - 1, y + h - 1, '▘', top_b, COLOR_PLATE_BG)
+                    self.canvas.set_cell(ix, y + h - 1, '▀', top_b, t["plate_bg"])
+                self.canvas.set_cell(x + w - 1, y + h - 1, '▘', top_b, t["plate_bg"])
 
             # Keycap interior body & lateral borders
             glyph = glyph_set.get(label, None)
@@ -795,14 +949,12 @@ class TypingInstructorApp:
 
             for dy in range(1, h - 1):
                 cur_y = y + dy
-                self.canvas.set_cell(x, cur_y, '│' if not is_pressed else '▌', side_b, COLOR_PLATE_BG)
-                self.canvas.set_cell(x + w - 1, cur_y, '│' if not is_pressed else '▐', side_b, COLOR_PLATE_BG)
+                self.canvas.set_cell(x, cur_y, '│' if not (is_pressed or is_mistyped) else '▌', side_b, t["plate_bg"])
+                self.canvas.set_cell(x + w - 1, cur_y, '│' if not (is_pressed or is_mistyped) else '▐', side_b, t["plate_bg"])
 
-                # Fill keycap face
                 for ix in range(x + 1, x + w - 1):
                     self.canvas.set_cell(ix, cur_y, ' ', fg_col, bg_col)
 
-                # Render block font glyph
                 gy = dy - 1
                 if glyph and gy < max_glyph_lines:
                     glyph_row = glyph[gy]
@@ -822,6 +974,7 @@ class TypingInstructorApp:
 
     def draw_hands_and_fingers(self):
         """Renders shaded ASCII palms, wrists, and animated fingers layered over keyboard."""
+        t = self.theme
         kx = self.kbd_x
         row4_bot = self.kbd_y + self.kbd_h
         screen_bot = self.term_h
@@ -839,14 +992,13 @@ class TypingInstructorApp:
                 dist_edge = min(x - x_min, x_max - x)
                 if dist_edge == 0:
                     ch = '│' if (x == x_min or x == x_max) else '░'
-                    col = SKIN_LOW
+                    col = t["skin_low"]
                 elif dist_edge == 1:
                     ch = '▒'
-                    col = SKIN_MID
+                    col = t["skin_mid"]
                 else:
                     ch = '█'
-                    # Thenar eminence highlight (thumb pad muscle)
-                    col = SKIN_HIGHLIGHT if (x - x_min) in (4, 5, 6, 7) and prog < 0.6 else SKIN_MID
+                    col = t["skin_high"] if (x - x_min) in (4, 5, 6, 7) and prog < 0.6 else t["skin_mid"]
                 self.canvas.set_cell(x, y, ch, col, None)
 
         # 2. Right Palm & Wrist
@@ -862,13 +1014,13 @@ class TypingInstructorApp:
                 dist_edge = min(x - x_min, x_max - x)
                 if dist_edge == 0:
                     ch = '│' if (x == x_min or x == x_max) else '░'
-                    col = SKIN_LOW
+                    col = t["skin_low"]
                 elif dist_edge == 1:
                     ch = '▒'
-                    col = SKIN_MID
+                    col = t["skin_mid"]
                 else:
                     ch = '█'
-                    col = SKIN_HIGHLIGHT if (x_max - x) in (4, 5, 6, 7) and prog < 0.6 else SKIN_MID
+                    col = t["skin_high"] if (x_max - x) in (4, 5, 6, 7) and prog < 0.6 else t["skin_mid"]
                 self.canvas.set_cell(x, y, ch, col, None)
 
         # 3. Draw All 10 Fingers (Shafts + Fingertips)
@@ -877,47 +1029,45 @@ class TypingInstructorApp:
 
     def _draw_single_finger(self, f: AnimatedFinger):
         """Draws finger shaft from knuckle to fingertip and shaped nail/pad."""
+        t = self.theme
         bx, by = f.knuckle_x, f.knuckle_y
         tx, ty = f.cur_x, f.cur_y
         striking = f.is_striking
 
-        # Linear shaft traversal
         length = math.hypot(tx - bx, ty - by)
         steps = max(1, int(length * 2.2))
 
         for s in range(steps):
-            t = s / steps
-            cx = bx + (tx - bx) * t
-            cy = by + (ty - by) * t
+            prog = s / steps
+            cx = bx + (tx - bx) * prog
+            cy = by + (ty - by) * prog
             ix = int(round(cx))
             iy = int(round(cy))
 
-            # Draw 3-character wide finger shaft with lateral contour
-            self.canvas.set_cell(ix - 1, iy, '▒', SKIN_LOW, None)
-            self.canvas.set_cell(ix, iy, '█', SKIN_HIGHLIGHT if s % 4 == 0 else SKIN_MID, None)
-            self.canvas.set_cell(ix + 1, iy, '▒', SKIN_LOW, None)
+            self.canvas.set_cell(ix - 1, iy, '▒', t["skin_low"], None)
+            self.canvas.set_cell(ix, iy, '█', t["skin_high"] if s % 4 == 0 else t["skin_mid"], None)
+            self.canvas.set_cell(ix + 1, iy, '▒', t["skin_low"], None)
 
-        # Draw Distinct Fingertip (Nail, Cuticle, Pad Cushion)
         itx = int(round(tx))
         ity = int(round(ty))
-        nail_col = NAIL_STRIKE if striking else NAIL_COLOR
+        nail_col = (255, 255, 255) if striking else t["nail_col"]
 
-        # Fingertip upper arch & nail
-        self.canvas.set_cell(itx - 1, ity - 1, '╭', SKIN_LOW, None)
+        # Upper nail
+        self.canvas.set_cell(itx - 1, ity - 1, '╭', t["skin_low"], None)
         self.canvas.set_cell(itx, ity - 1, '▀', nail_col, None, bold=striking)
-        self.canvas.set_cell(itx + 1, ity - 1, '╮', SKIN_LOW, None)
+        self.canvas.set_cell(itx + 1, ity - 1, '╮', t["skin_low"], None)
 
-        # Fingertip pad
-        self.canvas.set_cell(itx - 2, ity, '(', SKIN_LOW, None)
-        self.canvas.set_cell(itx - 1, ity, '▓', SKIN_MID, None)
-        self.canvas.set_cell(itx, ity, '█', nail_col if striking else SKIN_HIGHLIGHT, None, bold=striking)
-        self.canvas.set_cell(itx + 1, ity, '▓', SKIN_MID, None)
-        self.canvas.set_cell(itx + 2, ity, ')', SKIN_LOW, None)
+        # Pad
+        self.canvas.set_cell(itx - 2, ity, '(', t["skin_low"], None)
+        self.canvas.set_cell(itx - 1, ity, '▓', t["skin_mid"], None)
+        self.canvas.set_cell(itx, ity, '█', nail_col if striking else t["skin_high"], None, bold=striking)
+        self.canvas.set_cell(itx + 1, ity, '▓', t["skin_mid"], None)
+        self.canvas.set_cell(itx + 2, ity, ')', t["skin_low"], None)
 
-        # Fingertip lower joint
-        self.canvas.set_cell(itx - 1, ity + 1, '│', SKIN_LOW, None)
-        self.canvas.set_cell(itx, ity + 1, '█', SKIN_MID, None)
-        self.canvas.set_cell(itx + 1, ity + 1, '│', SKIN_LOW, None)
+        # Lower joint
+        self.canvas.set_cell(itx - 1, ity + 1, '│', t["skin_low"], None)
+        self.canvas.set_cell(itx, ity + 1, '█', t["skin_mid"], None)
+        self.canvas.set_cell(itx + 1, ity + 1, '│', t["skin_low"], None)
 
     # ------------------------------------------------------------------------
     # Simulation & State Updates
@@ -927,42 +1077,48 @@ class TypingInstructorApp:
         """Updates finger animation states and automated typing demo cadence."""
         self.active_depressed_keys.clear()
 
-        # Update all 10 fingers
         for finger in self.fingers:
             struck = finger.update(now)
             if struck:
                 self.active_depressed_keys.add(struck)
 
-        # Update automated typing demo loop
-        if self.demo_mode:
-            drill_text = self.DEMO_DRILLS[self.current_drill_idx]
+        # Automated demo mode
+        if self.mode == AppMode.AUTO_DEMO:
+            drill_text = self.current_drill_text
             if self.drill_char_idx < len(drill_text):
                 next_char = drill_text[self.drill_char_idx]
-                target_norm = next_char.upper()
-                if next_char in SHIFTED_MAP:
-                    target_norm = SHIFTED_MAP[next_char]
-                elif next_char == ' ':
-                    target_norm = "SPACE"
-                self.target_key = target_norm
+                norm_key = self._normalize_key(next_char)
+                self.target_key = norm_key
+                f_name = FINGER_NAMES[KEY_TO_FINGER.get(norm_key, 0)]
+                self.tutor_feedback = f"Automated Demo: '{next_char}' with {f_name}."
 
                 if now - self.last_demo_strike_time >= self.demo_char_delay:
                     self.trigger_key_strike(next_char)
                     self.drill_char_idx += 1
+                    self.correct_keypresses += 1
+                    self.total_keypresses += 1
+                    self.streak += 1
                     self.last_demo_strike_time = now
-                    # Natural typing cadence jitter
-                    self.demo_char_delay = random.uniform(0.12, 0.20)
+                    self.demo_char_delay = random.uniform(0.12, 0.19)
             else:
-                # Advance to next drill after brief pause
                 if now - self.last_demo_strike_time >= 1.2:
-                    self.current_drill_idx = (self.current_drill_idx + 1) % len(self.DEMO_DRILLS)
                     self.drill_char_idx = 0
+                    self.drill_cat_idx = (self.drill_cat_idx + 1) % len(self.DRILL_CATEGORIES)
                     self.last_demo_strike_time = now
+
+        elif self.mode == AppMode.GUIDED_LESSON:
+            drill_text = self.current_drill_text
+            if self.drill_char_idx < len(drill_text):
+                exp_char = drill_text[self.drill_char_idx]
+                self.target_key = self._normalize_key(exp_char)
+            else:
+                self.target_key = None
         else:
             self.target_key = None
 
     def render_frame(self):
         """Assembles all layers onto canvas and performs atomic zero-flicker flush."""
-        self.canvas.clear()
+        self.canvas.clear(self.theme["desk_bg"])
         self.draw_hud()
         self.draw_keyboard_chassis()
         self.draw_keycaps()
@@ -980,7 +1136,6 @@ class TypingInstructorApp:
         if sys.stdin.isatty():
             self.old_termios = termios.tcgetattr(sys.stdin)
             tty.setcbreak(sys.stdin.fileno())
-        # Hide cursor & clear screen once
         sys.stdout.write("\033[?25l\033[2J")
         sys.stdout.flush()
 
@@ -1017,22 +1172,34 @@ class TypingInstructorApp:
                 _ = sys.stdin.read(2)
                 return
 
-        elif ch == '\t':  # TAB toggles Demo Mode
-            self.demo_mode = not self.demo_mode
+        elif ch == '\t':  # TAB cycles Modes (Guided Lesson -> Free Play -> Auto Demo)
+            self.mode = (self.mode + 1) % 3
             self.drill_char_idx = 0
             self.last_demo_strike_time = time.time()
             return
 
-        # Interactive typing mode
-        if not self.demo_mode:
-            self.trigger_key_strike(ch)
+        elif ch in ('t', 'T') and self.mode != AppMode.GUIDED_LESSON:  # T cycles Themes
+            self.theme_idx = (self.theme_idx + 1) % len(THEMES)
+            self.tutor_feedback = f"Switched theme to: {self.theme['name']}"
+            return
+
+        elif ch in ('d', 'D') and self.mode != AppMode.GUIDED_LESSON:  # D cycles Drills
+            self.drill_cat_idx = (self.drill_cat_idx + 1) % len(self.DRILL_CATEGORIES)
+            self.drill_char_idx = 0
+            self.last_demo_strike_time = time.time()
+            self.tutor_feedback = f"Selected drill: {self.current_drill_name}"
+            return
+
+        # Interactive typing stroke
+        if self.mode != AppMode.AUTO_DEMO:
+            self.handle_interactive_stroke(ch)
 
     def run(self, max_frames: Optional[int] = None):
         """Main 60 FPS double-buffered event loop."""
         self.setup_terminal()
         signal.signal(signal.SIGWINCH, lambda sig, frame: self.on_terminal_resize())
 
-        target_dt = 1.0 / 60.0  # 60 FPS
+        target_dt = 1.0 / 60.0
         frames_rendered = 0
 
         try:
@@ -1062,13 +1229,20 @@ class TypingInstructorApp:
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="Vintage Typing Instructor Hands-on-Keyboard CLI")
-    parser.add_argument("--interactive", action="store_true", help="Start directly in interactive typing mode")
+    parser.add_argument("--interactive", action="store_true", help="Start directly in Guided Lesson interactive mode")
+    parser.add_argument("--free", action="store_true", help="Start directly in Free Key Explorer mode")
+    parser.add_argument("--theme", type=int, default=0, help="Theme index (0: IBM Model M, 1: Cyberpunk, 2: Phosphor, 3: Apple)")
     parser.add_argument("--frames", type=int, default=None, help="Run for N frames and exit (for automated testing)")
     args = parser.parse_args()
 
     app = TypingInstructorApp()
     if args.interactive:
-        app.demo_mode = False
+        app.mode = AppMode.GUIDED_LESSON
+    elif args.free:
+        app.mode = AppMode.FREE_PLAY
+
+    if 0 <= args.theme < len(THEMES):
+        app.theme_idx = args.theme
 
     atexit.register(app.restore_terminal)
     app.run(max_frames=args.frames)
