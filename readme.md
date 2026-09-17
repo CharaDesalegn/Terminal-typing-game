@@ -49,8 +49,13 @@ A lightweight, responsive, and distraction-free terminal typing speed and practi
 ### 4. 📊 Error & Mistake Board (Confusion Matrix & Analytics)
 * **Goal:** Understand your personal typing mistakes and target your weak keys for rapid improvement.
 * **🔍 Mistake Tracking:** Tracks every single mistyped character (e.g., typing `E` instead of `D`, or `R` instead of `T`).
+* **⌨️ Interactive Visual Keyboard & Error Heatmap:**
+  * **Full QWERTY Layout:** Renders the keyboard layout directly on the Error Board.
+  * **✨ Real-Time Keypress Highlighting:** Press ANY key on your physical keyboard (or click any key with your mouse) to see that key instantly light up in prominent reverse gold!
+  * **🟡 / 🔴 Weak-Key Heatmap:** Keys with mistypes are color-coded in yellow (1–2 errors) or vivid red (3+ errors), while clean keys glow in green.
+  * **⚠️ Confusion Matrix Visualizer:** When a key is inspected, any keys you mistakenly hit instead of that target key light up in red, showing your finger reach slips right on the keyboard.
 * **🔑 Interactive Single-Key Inspection (Pinned to Top):**
-  * **Press ANY key (e.g. `[D]`, `[E]`, `[R]`)** or click any row on the board: that key's error analysis immediately moves directly to the **very top of the Error Board and top of the table** so you can check it instantly.
+  * **Press ANY key (e.g. `[D]`, `[E]`, `[R]`, `[Space]`)** or click any key / table row on the board: that key's error analysis immediately moves directly to the **very top of the Error Board and top of the table** so you can check it instantly.
   * Displays the target key, proper finger and position hint, exact mistyped characters with error counts, accuracy percentage, and root-cause finger diagnosis.
 * **🎯 High-Density Focused Practice Mode (Error Board Protected):**
   * While inspecting any key, press **`[ENTER]`** (or click the practice button) to enter a focused drill where words are heavily saturated with that letter (including words with 2, 3, or more occurrences of that target key).
@@ -77,9 +82,10 @@ A lightweight, responsive, and distraction-free terminal typing speed and practi
    * **`TAB`:** Cycle through all modes (`Sprint` ➔ `Endless` ➔ `Tutor` ➔ `Board`).
    * **`ENTER` / `F2`:** Advance to next drill in Tutor mode.
    * **On Error Board:**
-     * **Press ANY key (e.g. `D`, `E`, `S`):** Inspect errors and diagnosis for that specific key.
-     * **`ENTER`:** Practice words densely packed with the inspected key (or practice top weak keys if none inspected).
-     * **`Backspace` / `ESC`:** Close key inspection and return to full table.
+      * **Press ANY key (e.g. `D`, `E`, `S`, `Space`):** Highlights the key in real-time on the visual keyboard and inspects its errors & diagnosis.
+      * **Click ANY key:** Mouse-clickable keycaps to inspect and highlight any key directly on the keyboard.
+      * **`ENTER`:** Practice words densely packed with the inspected key (or practice top weak keys if none inspected).
+      * **`Backspace` / `ESC`:** Close key inspection and return to full table.
      * **`F1` / `TAB`:** Toggle between Session and All-Time stats.
      * **`F2`:** Practice top weak keys drill.
      * **`F3` / `Delete`:** Clear mistake statistics.

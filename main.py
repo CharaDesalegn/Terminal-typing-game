@@ -201,7 +201,11 @@ BASE_KEY_MAP = {
 }
 
 def get_base_key(ch):
-    if ch.isupper():
+    if not ch:
+        return None
+    if ch in (' ', 'SPACE'):
+        return ' '
+    if isinstance(ch, str) and ch.isupper():
         return ch.lower()
     return BASE_KEY_MAP.get(ch, ch)
 
@@ -1374,7 +1378,7 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
             btn_practice = "[ F2: 🎯 Practice Weak Keys ]"
             btn_clear = "[ F3: 🔄 Clear Stats ]"
 
-            row_act = 2
+            row_act = 2 if max_y >= 24 else 1
             ax = 2
             safe_addstr(stdscr, row_act, ax, btn_scope, curses.A_BOLD | c_cyan)
             board_action_buttons.append((row_act, ax, ax + len(btn_scope), "TOGGLE_SCOPE"))
@@ -1393,7 +1397,7 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
                 safe_addstr(stdscr, row_act, not_x, board_notice, curses.A_BOLD | c_highlight)
 
             # Overview Stat Row
-            stat_row_y = 3
+            stat_row_y = row_act + 1
             if board_inspected_key is not None:
                 detail_top = engine.tracker.get_key_detail(board_inspected_key, session_only=board_session_only)
                 tk_name = repr_ch(board_inspected_key).upper()
@@ -1413,7 +1417,90 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
 
                 summary_text = f"📊 Scope: {scope_title}  |  ❌ Total Mistakes: {tot_errs}  |  🎯 Overall Accuracy: {ovr_acc}%{weakest_str}"
                 safe_addstr(stdscr, stat_row_y, 2, summary_text[:max_x - 4], curses.A_BOLD | c_white)
-            safe_addstr(stdscr, 4, 2, "─" * (max_x - 4), c_faded)
+
+            # ==========================================
+            # KEYBOARD ERROR HEATMAP & KEY HIGHLIGHTER
+            # ==========================================
+            if max_y >= 26:
+                row_kb_header = stat_row_y + 1
+                kb_title = "⌨️  KEYBOARD HEATMAP (Press or click ANY key to highlight & inspect)"
+                safe_addstr(stdscr, row_kb_header, max(2, (max_x - len(kb_title)) // 2), kb_title, curses.A_BOLD | c_cyan)
+                row_keyboard = row_kb_header + 1
+            else:
+                row_keyboard = stat_row_y + 1
+
+            kb_x = max(2, (max_x - 60) // 2)
+
+            base_inspected = get_base_key(board_inspected_key) if board_inspected_key is not None else None
+            base_pressed = get_base_key(last_pressed_char) if last_pressed_char is not None else None
+            shift_req = needs_shift(board_inspected_key) if board_inspected_key is not None else False
+            side = finger_side(board_inspected_key) if board_inspected_key is not None else "LEFT"
+            is_recent_press = (time.time() - last_key_press_time < 0.4)
+
+            # Details for inspected key (if any)
+            inspected_mistypes = {}
+            most_common_wrong = None
+            if board_inspected_key is not None:
+                inspected_detail = engine.tracker.get_key_detail(board_inspected_key, session_only=board_session_only)
+                inspected_mistypes = {get_base_key(k): cnt for k, cnt in inspected_detail.get("mistypes", {}).items() if get_base_key(k)}
+                most_common_wrong = get_base_key(inspected_detail.get("most_common_wrong"))
+
+            # Current error store for coloring heatmap
+            store = engine.tracker.session if board_session_only else engine.tracker.all_time
+
+            for r_idx, row_keys in enumerate(KEYBOARD_LAYOUT):
+                ky = row_keyboard + r_idx
+                kx = kb_x
+                for key_id, k_finger, label in row_keys:
+                    is_active = (base_inspected is not None and key_id == base_inspected)
+                    is_press_flash = (is_recent_press and base_pressed is not None and key_id == base_pressed)
+                    is_shift = shift_req and (
+                        (key_id == "Shift_L" and side == "RIGHT") or
+                        (key_id == "Shift_R" and side == "LEFT")
+                    )
+
+                    # Check mistakes count for this key in store
+                    k_errs = 0
+                    k_corr = 0
+                    for cand in (key_id, key_id.upper() if isinstance(key_id, str) else key_id):
+                        if cand in store:
+                            k_errs += sum(store[cand].get("mistypes", {}).values())
+                            k_corr += store[cand].get("correct", 0)
+
+                    # Highlight priority:
+                    # 1. Pressed / Active Inspected key
+                    if is_active or is_press_flash:
+                        k_attr = curses.A_REVERSE | c_highlight | curses.A_BOLD
+                    # 2. Shift key if needed
+                    elif is_shift:
+                        k_attr = curses.A_REVERSE | c_cyan | curses.A_BOLD
+                    # 3. Mistyped / confused key for currently inspected key
+                    elif base_inspected is not None and key_id in inspected_mistypes and key_id != base_inspected:
+                        if key_id == most_common_wrong:
+                            k_attr = curses.A_REVERSE | c_red | curses.A_BOLD
+                        else:
+                            k_attr = c_red | curses.A_BOLD
+                    # 4. Error heatmap based on history
+                    elif k_errs >= 3:
+                        k_attr = c_red | curses.A_BOLD
+                    elif k_errs >= 1:
+                        k_attr = c_yellow | curses.A_BOLD
+                    elif k_corr > 0 and k_errs == 0:
+                        k_attr = c_green | curses.A_BOLD
+                    # 5. Home row tactile indicators
+                    elif key_id in ("a", "s", "d", "f", "j", "k", "l", ";"):
+                        k_attr = c_faded | curses.A_UNDERLINE
+                    # 6. Default
+                    else:
+                        k_attr = c_faded
+
+                    safe_addstr(stdscr, ky, kx, label, k_attr)
+                    board_action_buttons.append((ky, kx, kx + len(label), f"KEY_{key_id}"))
+                    kx += len(label) + 1
+
+            row_kb_divider = row_keyboard + 5
+            safe_addstr(stdscr, row_kb_divider, 2, "─" * (max_x - 4), c_faded)
+            content_start_y = row_kb_divider + 1
 
             # Key Inspection Card (if a key is inspected)
             if board_inspected_key is not None:
@@ -1423,99 +1510,135 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
 
                 card_w = min(max_x - 4, 76)
                 card_x = max(2, (max_x - card_w) // 2)
-                card_y = 5
+                card_y = content_start_y
 
-                # Top Border with title
-                title = f" 🔍 KEY INSPECTION: [ {target_disp.upper()} ] "
-                pad = max(0, (card_w - 2 - len(title)) // 2)
-                top_border = "╭" + "─" * pad + title + "─" * max(0, card_w - 2 - pad - len(title)) + "╮"
-                safe_addstr(stdscr, card_y, card_x, top_border, curses.A_BOLD | c_cyan)
+                # If screen height is tight (< 26), render compact 5-line card
+                if max_y < 26:
+                    title = f" 🔍 KEY: [ {target_disp.upper()} ]  |  🖐️ {f_name.upper()} "
+                    pad = max(0, (card_w - 2 - len(title)) // 2)
+                    top_border = "╭" + "─" * pad + title + "─" * max(0, card_w - 2 - pad - len(title)) + "╮"
+                    safe_addstr(stdscr, card_y, card_x, top_border, curses.A_BOLD | c_cyan)
 
-                # Line 1: Finger info
-                finger_line = f"🖐️  Finger: {f_name.upper()}  |  {f_hint}"
-                safe_addstr(stdscr, card_y + 1, card_x, "│", c_cyan)
-                safe_addstr(stdscr, card_y + 1, card_x + 2, finger_line[:card_w - 4], curses.A_BOLD | c_highlight)
-                safe_addstr(stdscr, card_y + 1, card_x + card_w - 1, "│", c_cyan)
-
-                # Line 2: Statistics & Errors
-                safe_addstr(stdscr, card_y + 2, card_x, "│", c_cyan)
-                if detail["total_attempts"] > 0:
-                    if detail["total_errors"] > 0:
-                        stat_txt = f"❌ Mistakes on [{target_disp}]: {detail['total_errors']}  |  ✅ Correct: {detail['correct']}  |  🎯 Accuracy: {detail['accuracy']}%"
-                        safe_addstr(stdscr, card_y + 2, card_x + 2, stat_txt[:card_w - 4], curses.A_BOLD | c_white)
+                    safe_addstr(stdscr, card_y + 1, card_x, "│", c_cyan)
+                    if detail["total_attempts"] > 0:
+                        if detail["total_errors"] > 0:
+                            stat_txt = f"❌ Mistakes: {detail['total_errors']} | 🎯 Acc: {detail['accuracy']}% | 💡 {detail['diagnosis']}"
+                        else:
+                            stat_txt = f"✅ Clean Precision! 0 mistakes on [{target_disp}] (100% accuracy)"
                     else:
-                        stat_txt = f"✅ Clean Precision! 0 mistakes on [{target_disp}] ({detail['correct']} correct hits, 100% accuracy)"
-                        safe_addstr(stdscr, card_y + 2, card_x + 2, stat_txt[:card_w - 4], curses.A_BOLD | c_green)
+                        stat_txt = f"ℹ️  No keystrokes recorded yet for key [{target_disp}]."
+                    safe_addstr(stdscr, card_y + 1, card_x + 2, stat_txt[:card_w - 4], curses.A_BOLD | (c_white if detail['total_errors'] > 0 else c_green))
+                    safe_addstr(stdscr, card_y + 1, card_x + card_w - 1, "│", c_cyan)
+
+                    safe_addstr(stdscr, card_y + 2, card_x, "│", c_cyan)
+                    if detail["total_errors"] > 0:
+                        parts = [f"'{repr_ch(w)}' ({cnt}x)" for w, cnt in detail["mistypes"].items()]
+                        mistypes_txt = f"⚠️ Mistyped as: {', '.join(parts)}"
+                        safe_addstr(stdscr, card_y + 2, card_x + 2, mistypes_txt[:card_w - 4], curses.A_BOLD | c_yellow)
+                    else:
+                        clean_txt = f"Rest on home row. Press [ENTER] to practice words with [{target_disp}]."
+                        safe_addstr(stdscr, card_y + 2, card_x + 2, clean_txt[:card_w - 4], c_faded)
+                    safe_addstr(stdscr, card_y + 2, card_x + card_w - 1, "│", c_cyan)
+
+                    safe_addstr(stdscr, card_y + 3, card_x, "│", c_cyan)
+                    btn_drill_txt = f"🎯 [ ENTER: Practice Words with '{target_disp}' ]"
+                    btn_close_txt = "[ Backspace / ESC: Close ]"
+                    safe_addstr(stdscr, card_y + 3, card_x + 2, btn_drill_txt, curses.A_BOLD | c_green)
+                    board_action_buttons.append((card_y + 3, card_x + 2, card_x + 2 + len(btn_drill_txt), "PRACTICE_INSPECTED"))
+                    cx_close = card_x + card_w - len(btn_close_txt) - 2
+                    safe_addstr(stdscr, card_y + 3, cx_close, btn_close_txt, c_cyan)
+                    board_action_buttons.append((card_y + 3, cx_close, cx_close + len(btn_close_txt), "CLOSE_INSPECTION"))
+                    safe_addstr(stdscr, card_y + 3, card_x + card_w - 1, "│", c_cyan)
+
+                    bot_border = "╰" + "─" * (card_w - 2) + "╯"
+                    safe_addstr(stdscr, card_y + 4, card_x, bot_border, curses.A_BOLD | c_cyan)
+                    card_bottom = card_y + 5
                 else:
-                    stat_txt = f"ℹ️  No keystrokes recorded yet for key [{target_disp}] in {scope_title}."
-                    safe_addstr(stdscr, card_y + 2, card_x + 2, stat_txt[:card_w - 4], c_white)
-                safe_addstr(stdscr, card_y + 2, card_x + card_w - 1, "│", c_cyan)
+                    # Full 7-line card
+                    title = f" 🔍 KEY INSPECTION: [ {target_disp.upper()} ] "
+                    pad = max(0, (card_w - 2 - len(title)) // 2)
+                    top_border = "╭" + "─" * pad + title + "─" * max(0, card_w - 2 - pad - len(title)) + "╮"
+                    safe_addstr(stdscr, card_y, card_x, top_border, curses.A_BOLD | c_cyan)
 
-                # Line 3: Mistype breakdown
-                safe_addstr(stdscr, card_y + 3, card_x, "│", c_cyan)
-                if detail["total_errors"] > 0:
-                    parts = [f"'{repr_ch(w)}' ({cnt}x)" for w, cnt in detail["mistypes"].items()]
-                    mistypes_txt = f"⚠️ Mistyped as: {', '.join(parts)}"
-                    safe_addstr(stdscr, card_y + 3, card_x + 2, mistypes_txt[:card_w - 4], curses.A_BOLD | c_yellow)
-                elif detail["correct"] > 0:
-                    clean_txt = f"🎉 Perfect score on [{target_disp}]! You consistently hit this key accurately."
-                    safe_addstr(stdscr, card_y + 3, card_x + 2, clean_txt[:card_w - 4], c_green)
-                else:
-                    clean_txt = "Press [ENTER] to practice words containing this key and build muscle memory!"
-                    safe_addstr(stdscr, card_y + 3, card_x + 2, clean_txt[:card_w - 4], c_faded)
-                safe_addstr(stdscr, card_y + 3, card_x + card_w - 1, "│", c_cyan)
+                    finger_line = f"🖐️  Finger: {f_name.upper()}  |  {f_hint}"
+                    safe_addstr(stdscr, card_y + 1, card_x, "│", c_cyan)
+                    safe_addstr(stdscr, card_y + 1, card_x + 2, finger_line[:card_w - 4], curses.A_BOLD | c_highlight)
+                    safe_addstr(stdscr, card_y + 1, card_x + card_w - 1, "│", c_cyan)
 
-                # Line 4: Diagnosis
-                safe_addstr(stdscr, card_y + 4, card_x, "│", c_cyan)
-                if detail["total_errors"] > 0:
-                    diag_txt = f"💡 Diagnosis: {detail['diagnosis']}"
-                    safe_addstr(stdscr, card_y + 4, card_x + 2, diag_txt[:card_w - 4], c_white)
-                else:
-                    rec_txt = f"💡 Recommended Hand Position: Rest fingers on home row, strike [{target_disp}] lightly."
-                    safe_addstr(stdscr, card_y + 4, card_x + 2, rec_txt[:card_w - 4], c_faded)
-                safe_addstr(stdscr, card_y + 4, card_x + card_w - 1, "│", c_cyan)
+                    safe_addstr(stdscr, card_y + 2, card_x, "│", c_cyan)
+                    if detail["total_attempts"] > 0:
+                        if detail["total_errors"] > 0:
+                            stat_txt = f"❌ Mistakes on [{target_disp}]: {detail['total_errors']}  |  ✅ Correct: {detail['correct']}  |  🎯 Accuracy: {detail['accuracy']}%"
+                            safe_addstr(stdscr, card_y + 2, card_x + 2, stat_txt[:card_w - 4], curses.A_BOLD | c_white)
+                        else:
+                            stat_txt = f"✅ Clean Precision! 0 mistakes on [{target_disp}] ({detail['correct']} correct hits, 100% accuracy)"
+                            safe_addstr(stdscr, card_y + 2, card_x + 2, stat_txt[:card_w - 4], curses.A_BOLD | c_green)
+                    else:
+                        stat_txt = f"ℹ️  No keystrokes recorded yet for key [{target_disp}] in {scope_title}."
+                        safe_addstr(stdscr, card_y + 2, card_x + 2, stat_txt[:card_w - 4], c_white)
+                    safe_addstr(stdscr, card_y + 2, card_x + card_w - 1, "│", c_cyan)
 
-                # Line 5: Practice Button / Prompt
-                safe_addstr(stdscr, card_y + 5, card_x, "│", c_cyan)
-                btn_drill_txt = f"🎯 [ ENTER: Practice Words with '{target_disp}' ]"
-                btn_close_txt = "[ Backspace / ESC: Close ]"
-                safe_addstr(stdscr, card_y + 5, card_x + 2, btn_drill_txt, curses.A_BOLD | c_green)
-                board_action_buttons.append((card_y + 5, card_x + 2, card_x + 2 + len(btn_drill_txt), "PRACTICE_INSPECTED"))
-                cx_close = card_x + card_w - len(btn_close_txt) - 2
-                safe_addstr(stdscr, card_y + 5, cx_close, btn_close_txt, c_cyan)
-                board_action_buttons.append((card_y + 5, cx_close, cx_close + len(btn_close_txt), "CLOSE_INSPECTION"))
-                safe_addstr(stdscr, card_y + 5, card_x + card_w - 1, "│", c_cyan)
+                    safe_addstr(stdscr, card_y + 3, card_x, "│", c_cyan)
+                    if detail["total_errors"] > 0:
+                        parts = [f"'{repr_ch(w)}' ({cnt}x)" for w, cnt in detail["mistypes"].items()]
+                        mistypes_txt = f"⚠️ Mistyped as: {', '.join(parts)}"
+                        safe_addstr(stdscr, card_y + 3, card_x + 2, mistypes_txt[:card_w - 4], curses.A_BOLD | c_yellow)
+                    elif detail["correct"] > 0:
+                        clean_txt = f"🎉 Perfect score on [{target_disp}]! You consistently hit this key accurately."
+                        safe_addstr(stdscr, card_y + 3, card_x + 2, clean_txt[:card_w - 4], c_green)
+                    else:
+                        clean_txt = "Press [ENTER] to practice words containing this key and build muscle memory!"
+                        safe_addstr(stdscr, card_y + 3, card_x + 2, clean_txt[:card_w - 4], c_faded)
+                    safe_addstr(stdscr, card_y + 3, card_x + card_w - 1, "│", c_cyan)
 
-                # Bottom Border
-                bot_border = "╰" + "─" * (card_w - 2) + "╯"
-                safe_addstr(stdscr, card_y + 6, card_x, bot_border, curses.A_BOLD | c_cyan)
+                    safe_addstr(stdscr, card_y + 4, card_x, "│", c_cyan)
+                    if detail["total_errors"] > 0:
+                        diag_txt = f"💡 Diagnosis: {detail['diagnosis']}"
+                        safe_addstr(stdscr, card_y + 4, card_x + 2, diag_txt[:card_w - 4], c_white)
+                    else:
+                        rec_txt = f"💡 Recommended Hand Position: Rest fingers on home row, strike [{target_disp}] lightly."
+                        safe_addstr(stdscr, card_y + 4, card_x + 2, rec_txt[:card_w - 4], c_faded)
+                    safe_addstr(stdscr, card_y + 4, card_x + card_w - 1, "│", c_cyan)
 
-                card_bottom = card_y + 7
+                    safe_addstr(stdscr, card_y + 5, card_x, "│", c_cyan)
+                    btn_drill_txt = f"🎯 [ ENTER: Practice Words with '{target_disp}' ]"
+                    btn_close_txt = "[ Backspace / ESC: Close ]"
+                    safe_addstr(stdscr, card_y + 5, card_x + 2, btn_drill_txt, curses.A_BOLD | c_green)
+                    board_action_buttons.append((card_y + 5, card_x + 2, card_x + 2 + len(btn_drill_txt), "PRACTICE_INSPECTED"))
+                    cx_close = card_x + card_w - len(btn_close_txt) - 2
+                    safe_addstr(stdscr, card_y + 5, cx_close, btn_close_txt, c_cyan)
+                    board_action_buttons.append((card_y + 5, cx_close, cx_close + len(btn_close_txt), "CLOSE_INSPECTION"))
+                    safe_addstr(stdscr, card_y + 5, card_x + card_w - 1, "│", c_cyan)
+
+                    bot_border = "╰" + "─" * (card_w - 2) + "╯"
+                    safe_addstr(stdscr, card_y + 6, card_x, bot_border, curses.A_BOLD | c_cyan)
+
+                    card_bottom = card_y + 7
             else:
-                card_bottom = 5
+                card_bottom = content_start_y
 
             if not entries:
                 if board_inspected_key is None:
-                    card_y = max(6, (max_y - 12) // 2)
+                    card_y = content_start_y
                     box_w = min(max_x - 8, 64)
                     bx = max(2, (max_x - box_w) // 2)
                     safe_addstr(stdscr, card_y, bx, "╭" + "─" * (box_w - 2) + "╮", c_cyan)
                     msg1 = "🎯 NO MISTAKES RECORDED YET!"
                     msg2 = f"Your typing accuracy in {scope_title.lower()} is 100%."
                     msg3 = "Start typing in Sprint [1], Endless [2], or Tutor [3] mode."
-                    msg4 = "Whenever you mistype, it will appear right here with finger analysis!"
-                    msg5 = "👉 Press ANY letter key now (e.g. [D]) to inspect and practice it!"
+                    msg4 = "Whenever you mistype, it will appear right here on the keyboard & table!"
+                    msg5 = "👉 Press ANY key on your keyboard (e.g. [D]) to inspect & drill it!"
                     safe_addstr(stdscr, card_y + 1, max(bx + 1, bx + (box_w - len(msg1)) // 2), msg1, curses.A_BOLD | c_green)
-                    safe_addstr(stdscr, card_y + 3, max(bx + 1, bx + (box_w - len(msg2)) // 2), msg2, c_white)
-                    safe_addstr(stdscr, card_y + 4, max(bx + 1, bx + (box_w - len(msg3)) // 2), msg3, c_highlight)
-                    safe_addstr(stdscr, card_y + 6, max(bx + 1, bx + (box_w - len(msg4)) // 2), msg4, c_faded)
-                    safe_addstr(stdscr, card_y + 7, max(bx + 1, bx + (box_w - len(msg5)) // 2), msg5, curses.A_BOLD | c_yellow)
-                    safe_addstr(stdscr, card_y + 9, bx, "╰" + "─" * (box_w - 2) + "╯", c_cyan)
+                    safe_addstr(stdscr, card_y + 2, max(bx + 1, bx + (box_w - len(msg2)) // 2), msg2, c_white)
+                    safe_addstr(stdscr, card_y + 3, max(bx + 1, bx + (box_w - len(msg3)) // 2), msg3, c_highlight)
+                    safe_addstr(stdscr, card_y + 4, max(bx + 1, bx + (box_w - len(msg4)) // 2), msg4, c_faded)
+                    safe_addstr(stdscr, card_y + 5, max(bx + 1, bx + (box_w - len(msg5)) // 2), msg5, curses.A_BOLD | c_yellow)
+                    safe_addstr(stdscr, card_y + 6, bx, "╰" + "─" * (box_w - 2) + "╯", c_cyan)
             else:
                 if board_inspected_key is None:
-                    hint_line = "👉 Press ANY key (e.g. [D]) or click a row below to inspect its errors & drill it!"
-                    safe_addstr(stdscr, 5, 2, hint_line[:max_x - 4], curses.A_BOLD | c_highlight)
-                    th_y = 6
+                    hint_line = "👉 Press ANY key on your keyboard or click a key above to inspect errors & drill it!"
+                    safe_addstr(stdscr, content_start_y, 2, hint_line[:max_x - 4], curses.A_BOLD | c_highlight)
+                    th_y = content_start_y + 1
                 else:
                     th_y = card_bottom
 
@@ -1691,11 +1814,35 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
                             elif action == "CLOSE_INSPECTION":
                                 board_inspected_key = None
                                 board_scroll = 0
+                            elif action.startswith("KEY_"):
+                                k_id = action[4:]
+                                if k_id == "Bksp":
+                                    board_inspected_key = None
+                                    last_pressed_char = "Bksp"
+                                    last_key_press_time = time.time()
+                                    board_scroll = 0
+                                elif k_id == "Enter":
+                                    last_pressed_char = "Enter"
+                                    last_key_press_time = time.time()
+                                    if board_inspected_key:
+                                        words = engine.tracker.generate_words_for_single_key(board_inspected_key, count=25)
+                                        engine.custom_text = words
+                                        engine.practice_target_key = board_inspected_key
+                                        engine.is_practice_drill = True
+                                        engine.switch_mode("SPRINT", keep_custom=True)
+                                elif k_id not in ("Shift_L", "Shift_R", "Ctrl_L", "Ctrl_R", "Alt_L", "Alt_R", "Caps", "Tab"):
+                                    board_inspected_key = k_id
+                                    last_pressed_char = k_id
+                                    last_key_press_time = time.time()
+                                    board_scroll = 0
+                                    board_notice = None
                             break
                     if not handled_btn:
                         for r_y, t_ch in board_table_rows_meta:
                             if my == r_y:
                                 board_inspected_key = t_ch
+                                last_pressed_char = t_ch
+                                last_key_press_time = time.time()
                                 board_scroll = 0
                                 break
                 elif my == drill_button_row and engine.mode == "TUTOR" and (bstate & (curses.BUTTON1_CLICKED | curses.BUTTON1_PRESSED | curses.BUTTON1_RELEASED)):
@@ -1731,15 +1878,18 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
             last_pressed_char = None
             last_target_mistyped = None
         elif ch in (curses.KEY_BACKSPACE, 127, 8, ord('\b')):
+            last_pressed_char = "Bksp"
+            last_key_press_time = time.time()
             if engine.mode == "BOARD" and board_inspected_key is not None:
                 board_inspected_key = None
                 board_scroll = 0
                 continue
             engine.backspace()
-            last_pressed_char = None
             last_target_mistyped = None
             last_press_was_correct = True
         elif ch in (10, 13, curses.KEY_ENTER):
+            last_pressed_char = "Enter"
+            last_key_press_time = time.time()
             if engine.mode == "BOARD":
                 if board_inspected_key is not None:
                     words = engine.tracker.generate_words_for_single_key(board_inspected_key, count=25)
@@ -1818,6 +1968,8 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
                 # User pressed a key on the Error Board: inspect that specific key and place it at the top!
                 inspected = pressed_char.lower() if pressed_char.isalpha() else pressed_char
                 board_inspected_key = inspected
+                last_pressed_char = inspected
+                last_key_press_time = time.time()
                 board_scroll = 0
                 board_notice = None
                 continue
