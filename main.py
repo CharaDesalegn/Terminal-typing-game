@@ -782,6 +782,91 @@ def render_daily_bar_chart(days_list, height=4, col_width=7):
     return rows, dates_line, wpm_line, err_line, max_val
 
 
+def choose_line_char(d_in, d_out):
+    """Select the best connecting line character based on slope."""
+    if d_in == 0 and d_out == 0:
+        return '─'
+    elif d_in < 0 and d_out < 0:
+        return '╱'
+    elif d_in > 0 and d_out > 0:
+        return '╲'
+    elif d_in == 0 and d_out < 0:
+        return '╯'
+    elif d_in < 0 and d_out == 0:
+        return '╭'
+    elif d_in == 0 and d_out > 0:
+        return '╮'
+    elif d_in > 0 and d_out == 0:
+        return '╰'
+    elif d_in < 0 and d_out > 0:
+        return '╭'
+    elif d_in > 0 and d_out < 0:
+        return '╰'
+    return '─'
+
+
+def render_dual_line_chart(wpm_pts, err_pts, width=50, height=8):
+    """Render a single combined line chart for WPM and Errors."""
+    if not wpm_pts:
+        wpm_pts = [0.0]
+    if not err_pts:
+        err_pts = [0]
+
+    if len(wpm_pts) == 1:
+        wpm_pts = [wpm_pts[0], wpm_pts[0]]
+    if len(err_pts) == 1:
+        err_pts = [err_pts[0], err_pts[0]]
+
+    max_wpm = max(wpm_pts)
+    if max_wpm <= 0:
+        max_wpm = 50.0
+    min_wpm = 0.0
+
+    max_err = max(err_pts)
+    if max_err <= 0:
+        max_err = 5
+    min_err = 0
+
+    canvas = [[(' ', None) for _ in range(width)] for _ in range(height)]
+
+    series = [
+        ('wpm', wpm_pts, min_wpm, max_wpm, 'green'),
+        ('err', err_pts, min_err, max_err, 'red'),
+    ]
+
+    for name, values, min_v, max_v, tag in series:
+        span = max_v - min_v if max_v > min_v else 1.0
+        n = len(values)
+        step = (n - 1) / max(1, width - 1)
+        sampled = [values[min(n - 1, int(round(i * step)))] for i in range(width)]
+        rows = [min(height - 1, max(0, int(round((height - 1) * (1.0 - (v - min_v) / span))))) for v in sampled]
+
+        for c in range(width):
+            d_in = (rows[c] - rows[c - 1]) if c > 0 else 0
+            d_out = (rows[c + 1] - rows[c]) if c < width - 1 else 0
+            ch = choose_line_char(d_in, d_out)
+
+            existing_ch, existing_tag = canvas[rows[c]][c]
+            if existing_ch != ' ' and existing_tag != tag:
+                canvas[rows[c]][c] = ('✦', 'both')
+            else:
+                canvas[rows[c]][c] = (ch, tag)
+
+            if c < width - 1:
+                r0 = rows[c]
+                r1 = rows[c + 1]
+                low = min(r0, r1)
+                high = max(r0, r1)
+                for mid_r in range(low + 1, high):
+                    ex_ch, ex_tag = canvas[mid_r][c]
+                    if ex_ch != ' ' and ex_tag != tag:
+                        canvas[mid_r][c] = ('✦', 'both')
+                    else:
+                        canvas[mid_r][c] = ('│', tag)
+
+    return canvas, max_wpm, max_err
+
+
 def draw_graph_screen(stdscr, engine, stats, history_tracker, max_y, max_x, colors, top_buttons):
     c_white, c_green, c_red, c_highlight, c_faded, c_cyan, c_yellow, c_chassis = colors
 
@@ -798,67 +883,75 @@ def draw_graph_screen(stdscr, engine, stats, history_tracker, max_y, max_x, colo
     if len(err_pts) < 2:
         err_pts = [err_pts[0], err_pts[0]]
 
-    s_height = 4 if max_y >= 26 else 3
+    # Combined Dual Line Chart (WPM & Errors on one single line graph)
+    g_height = 8 if max_y >= 28 else (6 if max_y >= 24 else 5)
+    g_width = max(20, min(65, max_x - 18))
 
-    if max_x >= 74:
-        chart_w = min(32, (max_x - 18) // 2)
-        w_rows, w_max, _ = render_sparkline_rows(wpm_pts, width=chart_w, height=s_height)
-        e_rows, e_max, _ = render_sparkline_rows(err_pts, width=chart_w, height=s_height)
+    canvas, mw, me = render_dual_line_chart(wpm_pts, err_pts, width=g_width, height=g_height)
 
-        # Left: WPM Progression
-        safe_addstr(stdscr, 4, 4, f"SECTION WPM  ({int(w_max)} Max)", curses.A_BOLD | c_green)
-        for i, r in enumerate(w_rows):
-            val = int(w_max * (s_height - i) / s_height)
-            safe_addstr(stdscr, 5 + i, 4, f"{val:3d} │", c_faded)
-            safe_addstr(stdscr, 5 + i, 9, r, curses.A_BOLD | c_green)
-        base_y = 5 + s_height
-        safe_addstr(stdscr, base_y, 4, "    └──" + "─" * (chart_w - 2), c_faded)
+    # Line Chart Legend
+    safe_addstr(stdscr, 4, 4, "📈", curses.A_BOLD)
+    safe_addstr(stdscr, 4, 7, "── ⚡ WPM", curses.A_BOLD | c_green)
+    safe_addstr(stdscr, 4, 18, "── ❌ ERRORS", curses.A_BOLD | c_red)
+    if max_x >= 45:
+        safe_addstr(stdscr, 4, 33, "(✦ Crossing)", c_yellow)
 
-        # Right: Errors Progression
-        right_x = 4 + chart_w + 5
-        safe_addstr(stdscr, 4, right_x, f"SECTION ERRORS  ({int(e_max)} Total)", curses.A_BOLD | c_red)
-        for i, r in enumerate(e_rows):
-            val = int(e_max * (s_height - i) / s_height)
-            safe_addstr(stdscr, 5 + i, right_x, f"{val:3d} │", c_faded)
-            safe_addstr(stdscr, 5 + i, right_x + 5, r, curses.A_BOLD | c_red)
-        safe_addstr(stdscr, base_y, right_x, "    └──" + "─" * (chart_w - 2), c_faded)
-    else:
-        graph_w = max(10, min(50, max_x - 14))
-        w_rows, w_max, _ = render_sparkline_rows(wpm_pts, width=graph_w, height=s_height)
-        safe_addstr(stdscr, 4, 4, f"SECTION WPM  ({int(w_max)} Max)", curses.A_BOLD | c_green)
-        for i, r in enumerate(w_rows):
-            val = int(w_max * (s_height - i) / s_height)
-            safe_addstr(stdscr, 5 + i, 4, f"{val:3d} │", c_faded)
-            safe_addstr(stdscr, 5 + i, 9, r, curses.A_BOLD | c_green)
-        base_y = 5 + s_height
-        safe_addstr(stdscr, base_y, 4, "    └──" + "─" * (graph_w - 2), c_faded)
+    base_y = 5
+    for r in range(g_height):
+        w_tick = int(round(mw * (g_height - 1 - r) / max(1, g_height - 1)))
+        e_tick = int(round(me * (g_height - 1 - r) / max(1, g_height - 1)))
 
-    # 2. Daily History Graph
-    day_start_y = base_y + 2
-    if day_start_y + 6 < max_y:
-        safe_addstr(stdscr, day_start_y - 1, 2, "─" * (max_x - 4), c_faded)
-        safe_addstr(stdscr, day_start_y, 4, "DAILY HISTORY (OVERALL)", curses.A_BOLD | c_yellow)
+        # Left axis (WPM)
+        safe_addstr(stdscr, base_y + r, 4, f"{w_tick:3d} │", curses.A_BOLD | c_green)
 
-        col_w = 7
-        fit_days = max(1, (max_x - 14) // col_w)
-        recent_days = history_tracker.get_recent_days(count=min(7, fit_days))
+        # Line chart cells
+        for c in range(g_width):
+            ch, tag = canvas[r][c]
+            if ch != ' ':
+                if tag == 'both':
+                    attr = curses.A_BOLD | c_yellow
+                elif tag == 'green':
+                    attr = curses.A_BOLD | c_green
+                elif tag == 'red':
+                    attr = curses.A_BOLD | c_red
+                else:
+                    attr = c_faded
+                safe_addstr(stdscr, base_y + r, 9 + c, ch, attr)
+
+        # Right axis (Errors)
+        safe_addstr(stdscr, base_y + r, 9 + g_width, f"│ {e_tick:2d}", curses.A_BOLD | c_red)
+
+    bot_y = base_y + g_height
+    safe_addstr(stdscr, bot_y, 4, "    └──" + "─" * g_width + "──┘", c_faded)
+
+    # Time marks
+    start_t = "0.0s"
+    end_t = format_time(stats["elapsed"])
+    t_line = start_t + " " * max(1, g_width - len(start_t) - len(end_t)) + end_t
+    safe_addstr(stdscr, bot_y + 1, 9, t_line[:g_width], c_faded)
+
+    # 2. Daily History section (clean metrics, no rectangles)
+    day_y = bot_y + 3
+    if day_y + 4 < max_y:
+        safe_addstr(stdscr, day_y - 1, 2, "─" * (max_x - 4), c_faded)
+        safe_addstr(stdscr, day_y, 4, "DAILY HISTORY (OVERALL)", curses.A_BOLD | c_yellow)
+
+        recent_days = history_tracker.get_recent_days(count=7)
         if not recent_days:
             today_s = time.strftime("%m/%d")
-            recent_days = [{"date": today_s, "wpm": stats["wpm"], "errors": stats["mistakes"]}]
+            recent_days = [{"date": today_s, "wpm": stats["wpm"], "errors": stats["mistakes"], "sessions": 1}]
 
-        d_height = 4 if max_y >= 28 else 3
-        d_rows, dl, wl, el, d_max = render_daily_bar_chart(recent_days, height=d_height, col_width=col_w)
+        col_w = max(9, min(14, (max_x - 18) // max(1, len(recent_days))))
 
-        for i, r in enumerate(d_rows):
-            val = int(d_max * (d_height - i) / d_height)
-            safe_addstr(stdscr, day_start_y + 1 + i, 4, f"{val:3d} │", c_faded)
-            safe_addstr(stdscr, day_start_y + 1 + i, 9, r, curses.A_BOLD | c_cyan)
+        d_row = "DATE:  " + "".join(d["date"].center(col_w) for d in recent_days)
+        w_row = "SPEED: " + "".join(f"{int(d['wpm'])} WPM".center(col_w) for d in recent_days)
+        e_row = "ERRS:  " + "".join(f"{int(d['errors'])} err".center(col_w) for d in recent_days)
+        s_row = "SESS:  " + "".join(f"{d.get('sessions', 1)} runs".center(col_w) for d in recent_days)
 
-        chart_bot = day_start_y + 1 + d_height
-        safe_addstr(stdscr, chart_bot, 4, "    └──" + "─" * len(dl), c_faded)
-        safe_addstr(stdscr, chart_bot + 1, 9, dl, curses.A_BOLD | c_white)
-        safe_addstr(stdscr, chart_bot + 2, 9, wl, c_green)
-        safe_addstr(stdscr, chart_bot + 3, 9, el, c_red)
+        safe_addstr(stdscr, day_y + 1, 4, d_row[:max_x - 6], curses.A_BOLD | c_white)
+        safe_addstr(stdscr, day_y + 2, 4, w_row[:max_x - 6], c_green)
+        safe_addstr(stdscr, day_y + 3, 4, e_row[:max_x - 6], c_red)
+        safe_addstr(stdscr, day_y + 4, 4, s_row[:max_x - 6], c_faded)
 
     # Footer
     footer_y = max_y - 2
