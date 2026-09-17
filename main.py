@@ -429,47 +429,32 @@ KEYBOARD_LAYOUT = [
     ]
 ]
 
-# 9-line ASCII art hands (60 cols wide, fits comfortably on standard 24-row terminals)
-_LH_ART = [
-    " Pinky Ring Mid  Idx  Thb",
-    "  [P]  [R]  [M]  [I]  [T] ",
-    "   │    │   ╭─╮   │    │ ",
-    "  ╭─╮  ╭─╮  │ │  ╭─╮   │ ",
-    "  │ │  │ │  │ │  │ │  ╭─╮",
-    "  │ │  │ │  │ │  │ │  │ │",
-    "  │ ╰──┴─┴──┴─┴──┴─┴──┤ │",
-    "  │     LEFT HAND     │ ╯",
-    "  ╰───────────────────╯  "
+# Stylized 7-line ASCII / ANSI art hands resting on keyboard (modeled after reference typing.jpeg)
+# 60 columns wide, perfectly aligned with the mechanical QWERTY layout above
+HAND_ART_LINES = [
+    r"         ╭─╮ ╭─╮ ╭─╮ ╭─╮         ╭─╮ ╭─╮ ╭─╮ ╭─╮            ",
+    r"         │░│ │░│ │░│ │░│ ╭─╮ ╭─╮ │░│ │░│ │░│ │░│            ",
+    r"         │▒│ │▒│ │▒│ │▒│(·T) (·T)│▒│ │▒│ │▒│ │▒│            ",
+    r"        / ░░░░░░░░░░░░░░░ \│░│ │░│/ ░░░░░░░░░░░░░░░ \       ",
+    r"       / ▒▒▒▒ LEFT  HAND ▒▒\╰─╯ ╰─╯▒▒▒▒ RIGHT HAND ▒\       ",
+    r"      │ ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓│   │▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓│      ",
+    r"      ╰─────────────────────╯   ╰────────────────────╯      "
 ]
 
-_RH_ART = [
-    " Thb  Idx  Mid Ring Pinky",
-    " [T]  [I]  [M]  [R]  [P] ",
-    "  │    │   ╭─╮   │    │  ",
-    "  │   ╭─╮  │ │  ╭─╮  ╭─╮ ",
-    " ╭─╮  │ │  │ │  │ │  │ │ ",
-    " │ │  │ │  │ │  │ │  │ │ ",
-    " │ ├──┴─┴──┴─┴──┴─┴──╯ │ ",
-    " ╰ │     RIGHT HAND    │ ",
-    "   ╰───────────────────╯ "
-]
-
-_LH_ART = [f"{line:<25}"[:25] for line in _LH_ART]
-_RH_ART = [f"{line:<25}"[:25] for line in _RH_ART]
-HAND_LINES = [f"{l}          {r}" for l, r in zip(_LH_ART, _RH_ART)]
+HAND_LINES = HAND_ART_LINES
 
 FINGER_RANGES = {
-    "LP": [(0, 6)],
-    "LR": [(6, 11)],
-    "LM": [(11, 16)],
-    "LI": [(16, 21)],
-    "LT": [(21, 26)],
-    "RT": [(35, 40)],
-    "RI": [(40, 45)],
-    "RM": [(45, 50)],
-    "RR": [(50, 55)],
-    "RP": [(55, 60)],
-    "THUMB": [(21, 26), (35, 40)]
+    "LP": [(9, 12)],
+    "LR": [(13, 16)],
+    "LM": [(17, 20)],
+    "LI": [(21, 24)],
+    "LT": [(24, 28)],
+    "RT": [(28, 33)],
+    "RI": [(33, 36)],
+    "RM": [(37, 40)],
+    "RR": [(41, 44)],
+    "RP": [(45, 48)],
+    "THUMB": [(24, 33)]
 }
 
 # ==============================================================================
@@ -876,6 +861,7 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
 
     # High-contrast, easy-to-see color palette
     c_cyan = c_green = c_red = c_yellow = c_faded = c_white = c_highlight = 0
+    c_skin = c_skin_act = c_chassis = c_keycap = c_keymod = 0
     if curses.has_colors():
         curses.start_color()
         try:
@@ -890,15 +876,30 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
                 # Color 196: Vivid red
                 # Color 250: Crisp light slate gray (high contrast, clearly visible)
                 # Color 226: Bright gold
+                # Color 216: Warm peach/beige skin tone
+                # Color 228: Glowing warm active finger
+                # Color 239: Dark cool grey keyboard chassis
+                # Color 252: Off-white keycaps
+                # Color 245: Modifier keycaps
                 curses.init_pair(2, 46, -1)
                 curses.init_pair(3, 196, -1)
                 curses.init_pair(4, 250, -1)
                 curses.init_pair(7, 226, -1)
+                curses.init_pair(8, 216, -1)
+                curses.init_pair(9, 228, -1)
+                curses.init_pair(10, 239, -1)
+                curses.init_pair(11, 252, -1)
+                curses.init_pair(12, 245, -1)
             else:
                 curses.init_pair(2, curses.COLOR_GREEN, -1)
                 curses.init_pair(3, curses.COLOR_RED, -1)
                 curses.init_pair(4, curses.COLOR_WHITE, -1)
                 curses.init_pair(7, curses.COLOR_YELLOW, -1)
+                curses.init_pair(8, curses.COLOR_YELLOW, -1)
+                curses.init_pair(9, curses.COLOR_YELLOW, -1)
+                curses.init_pair(10, curses.COLOR_WHITE, -1)
+                curses.init_pair(11, curses.COLOR_WHITE, -1)
+                curses.init_pair(12, curses.COLOR_WHITE, -1)
 
             c_cyan = curses.color_pair(1) | curses.A_BOLD
             c_green = curses.color_pair(2) | curses.A_BOLD
@@ -907,6 +908,11 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
             c_yellow = curses.color_pair(5) | curses.A_BOLD
             c_white = curses.color_pair(6) | curses.A_BOLD  # Bright bold white
             c_highlight = curses.color_pair(7) | curses.A_BOLD
+            c_skin = curses.color_pair(8) | curses.A_BOLD
+            c_skin_act = curses.color_pair(9) | curses.A_BOLD
+            c_chassis = curses.color_pair(10)
+            c_keycap = curses.color_pair(11) | curses.A_BOLD
+            c_keymod = curses.color_pair(12)
         except curses.error:
             pass
 
@@ -1198,8 +1204,11 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
             row_sentence = start_y + 1
             row_banner = start_y + 2
             row_divider = start_y + 3
-            row_keyboard = start_y + 4
-            row_hands = start_y + 10
+            row_chassis_top = start_y + 4
+            row_keyboard = start_y + 5
+            row_chassis_mid = start_y + 10
+            row_hands = start_y + 11
+            row_chassis_bot = start_y + 18
 
             drill_button_row = row_drill
 
@@ -1280,15 +1289,20 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
             # Divider before keyboard
             safe_addstr(stdscr, row_divider, 2, "─" * (max_x - 4), c_faded)
 
-            # Centered Keyboard Layout (5 rows, 60 cols)
-            kb_x = max(2, (max_x - 60) // 2)
+            # Centered Mechanical Keyboard & Hands Layout (64 cols chassis, 60 cols inner keys)
+            kb_x = max(2, (max_x - 64) // 2)
             base_target = get_base_key(active_ch) if active_ch else None
             shift_needed = needs_shift(active_ch) if active_ch else False
             side = finger_side(active_ch) if active_ch else "LEFT"
 
+            # 1. Top Chassis Frame
+            safe_addstr(stdscr, row_chassis_top, kb_x, "╭" + "─" * 62 + "╮", c_chassis)
+
+            # 2. Five Keyboard Rows enclosed in chassis borders
             for r_idx, row_keys in enumerate(KEYBOARD_LAYOUT):
                 ky = row_keyboard + r_idx
-                kx = kb_x
+                safe_addstr(stdscr, ky, kb_x, "│ ", c_chassis)
+                kx = kb_x + 2
                 for key_id, k_finger, label in row_keys:
                     is_target = (base_target is not None and key_id == base_target)
                     is_shift = shift_needed and (
@@ -1309,15 +1323,21 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
                     elif is_shift:
                         k_attr = curses.A_REVERSE | c_cyan | curses.A_BOLD
                     elif key_id in ("a", "s", "d", "f", "j", "k", "l", ";"):
-                        k_attr = c_faded | curses.A_UNDERLINE
+                        k_attr = c_keycap | curses.A_UNDERLINE
+                    elif key_id in ("Tab", "Caps", "Shift_L", "Shift_R", "Ctrl_L", "Ctrl_R", "Alt_L", "Alt_R", "Bksp", "Enter"):
+                        k_attr = c_keymod
                     else:
-                        k_attr = c_faded
+                        k_attr = c_keycap
 
                     safe_addstr(stdscr, ky, kx, label, k_attr)
                     kx += len(label) + 1
+                safe_addstr(stdscr, ky, kb_x + 62, " │", c_chassis)
 
-            # Hand Diagram (9 rows, 60 cols, perfectly aligned with keyboard)
-            hx = kb_x
+            # 3. Middle Chassis Divider
+            safe_addstr(stdscr, row_chassis_mid, kb_x, "├" + "─" * 62 + "┤", c_chassis)
+
+            # 4. Hand Diagram (7 rows, 60 cols, perfectly aligned with keyboard and enclosed in chassis)
+            hx = kb_x + 2
             finger_info = KEY_FINGER_MAP.get(active_ch, ('THUMB', 'Thumb', '')) if active_ch else ('THUMB', '', '')
             active_finger_code = finger_info[0]
             active_ranges = list(FINGER_RANGES.get(active_finger_code, []))
@@ -1325,14 +1345,24 @@ def run_game(stdscr, initial_mode="SPRINT", custom_text=None):
                 shift_finger = "RP" if side == "LEFT" else "LP"
                 active_ranges.extend(FINGER_RANGES.get(shift_finger, []))
 
-            for line_idx, line in enumerate(HAND_LINES):
+            for line_idx, line in enumerate(HAND_ART_LINES):
                 hy = row_hands + line_idx
+                if hy >= max_y - 2:
+                    break
+                safe_addstr(stdscr, hy, kb_x, "│ ", c_chassis)
                 for col_idx, ch in enumerate(line):
                     in_active = any(s <= col_idx < e for s, e in active_ranges)
-                    if in_active and ch != " " and line_idx < 7:
-                        safe_addstr(stdscr, hy, hx + col_idx, ch, c_green | curses.A_BOLD)
+                    if in_active and ch != " " and line_idx < 3:
+                        safe_addstr(stdscr, hy, hx + col_idx, ch, c_skin_act)
+                    elif ch in ("░", "▒", "▓", "·", "T", "╭", "╮", "─", "╰", "╯", "│", "/", "\\"):
+                        safe_addstr(stdscr, hy, hx + col_idx, ch, c_skin)
                     else:
                         safe_addstr(stdscr, hy, hx + col_idx, ch, c_faded)
+                safe_addstr(stdscr, hy, kb_x + 62, " │", c_chassis)
+
+            # 5. Bottom Chassis Frame
+            if row_chassis_bot < max_y - 2:
+                safe_addstr(stdscr, row_chassis_bot, kb_x, "╰" + "─" * 62 + "╯", c_chassis)
 
             # Completion Card (if drill completed)
             if engine.completed:

@@ -33,11 +33,11 @@ A lightweight, responsive, and distraction-free terminal typing speed and practi
   * ⚙️ **Special Symbols & Code:** Appear once every **200 words** for occasional dexterity challenges.
 
 ### 3. 🖐️ Touch Typing Tutor (Finger Guide Mode)
-* **Goal:** Master proper 10-finger touch typing mechanics with visual keyboard and hand guidance.
-* **⌨️ Full QWERTY Layout:** Displays every key in true ANSI QWERTY alignment with centered spacebar and home row resting position indicators (`[A] [S] [D] [F]` and `[J] [K] [L] [;]`).
-* **🖐️ Faded Hand & Finger Positions:** Renders Left and Right hands with all 10 fingers (*Pinky*, *Ring*, *Middle*, *Index*, *Thumb*) faded in subtle gray.
-* **✨ Real-Time Finger Highlighting:** When a key needs to be typed, the key on the keyboard and its corresponding finger on the hand diagram light up in bright bold neon green.
-* **🎯 Prospective Finger Guidance:** Tells you exactly what to do before every keystroke (e.g. `👉 Press [ E ] with LEFT MIDDLE finger (Reach up from [D])`). If a mistake is made, it alerts you which finger you used vs which was expected, and prompts you to fix it.
+* **Goal:** Master proper 10-finger touch typing mechanics with realistic mechanical keyboard and hand guidance.
+* **⌨️ Mechanical Keyboard Layout:** Displays an authentic 60% ANSI mechanical keyboard with cool grey chassis borders, off-white keycaps, two-tone modifiers, and home row resting position indicators (`[A] [S] [D] [F]` and `[J] [K] [L] [;]`).
+* **🖐️ Stylized Shaded Hands & Finger Guidance:** Renders Left and Right hands with shaded ASCII blocks (`█, ▓, ▒, ░`), stippled knuckles, and fingernails in warm peach/beige skin tones resting on the keyboard and spacebar.
+* **✨ Real-Time Finger Highlighting:** When a key needs to be typed, the key on the keyboard lights up in bright contrasting highlight and its corresponding finger shaft and knuckle glow in warm active gold.
+* **🎯 Prospective Finger Guidance:** Tells you exactly what to do before every keystroke (e.g. `👉 Press [ E ] with LEFT MIDDLE finger (Reach up from [D])`). If a mistake is made, it alerts you which finger was pressed vs which was expected.
 * **📚 6 Built-in Drills:**
   1. **🏠 Home Row Mastery:** Rest position practice (`ASDF` and `JKL;`).
   2. **⬆️ Top Row Reach:** Upward reaches (`QWERTY UIOP`).
